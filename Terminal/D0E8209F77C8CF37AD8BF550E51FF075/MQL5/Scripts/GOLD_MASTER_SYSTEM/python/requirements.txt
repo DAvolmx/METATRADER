@@ -1,0 +1,10 @@
+MetaTrader5
+numpy
+pandas
+scikit-learn
+arch
+hmmlearn
+yfinance
+requests
+dash
+plotly

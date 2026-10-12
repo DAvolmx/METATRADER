@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GOLD MASTER · Replay SMC</title>
+<link rel="stylesheet" href="/static/style.css?v=0.6.5">
+<script src="/static/vendor/lightweight-charts.js"></script>
+</head>
+<body>
+<nav id="workspaceDock" aria-label="Espacio de trabajo"><button id="maximizeChart" title="Ocultar o restaurar controles">⛶ Ampliar gráfico</button><button id="dockTrade">Operar</button><details id="workspaceControls"><summary>☰ Paneles</summary><div class="workspace-options"><label><input type="checkbox" data-workspace="hideTop"> Barras superiores</label><label><input type="checkbox" data-workspace="hideTools"> Análisis y dibujo</label><label><input type="checkbox" data-workspace="hideReplay"> Reproducción</label><label><input type="checkbox" data-workspace="hideRanges"> Rangos y fechas</label><label><input type="checkbox" data-workspace="hideJournal"> Diario y resultados</label><label><input type="checkbox" data-workspace="hideRail"> Accesos laterales</label></div></details></nav>
+<!-- ===================== pestañas (una sesión independiente por pestaña) ===================== -->
+<div id="tabstrip">
+  <div id="tabs"></div>
+  <button id="tabAdd" class="tab-add" title="Nueva pestaña (Ctrl+T)">+</button>
+  <span class="grow"></span>
+  <span id="mt5" class="mt5" title="Estado de MetaTrader 5">MT5 —</span>
+  <a class="pill-btn observer-tab" href="/static/observatory.html" target="_blank" rel="noopener">Observatorio LIVE ↗</a>
+  <button id="themeBtn" class="icon" title="Tema claro/oscuro">◐</button>
+</div>
+
+<!-- ===================== barra superior estilo TradingView ===================== -->
+<header id="topbar">
+  <div class="avatar" title="LDZ Trading Terminal">L</div>
+  <button id="symBtn" class="sym" title="Cambiar símbolo / datos de esta pestaña"><span id="symName">—</span> <span class="muted">⌄</span></button>
+  <span class="sep"></span>
+  <div id="tfBar" class="tfbar"></div>
+  <span class="sep"></span>
+  <label class="layout-control" title="Distribución de gráficos"><span>Vista</span><select id="layoutSelect" aria-label="Distribución de gráficos">
+    <option value="1">1 gráfico</option><option value="2">2 gráficos</option><option value="2v">2 verticales</option><option value="3">3 · 1D / 4H / 15m</option><option value="4">4 gráficos</option>
+  </select></label>
+  <span class="sep"></span>
+  <button id="replayToggle" class="icon on" title="Reproducción (replay)">⏪</button>
+  <span class="grow"></span>
+  <span id="mode" class="mode">—</span>
+  <button id="btnLive" class="pill-btn" title="Datos en vivo de MT5">LIVE</button>
+  <button id="btnAuth" class="pill-btn" disabled title="Operaciones simuladas; LIVE consulta cotizaciones">SIMULACIÓN</button>
+  <button id="btnKill" class="pill-btn danger" title="Ejecución real deshabilitada">⛔</button>
+  <button id="openTrade" class="pill-btn">Operar</button>
+  <button id="openLearn" class="pill-btn primary">Aprender</button>
+</header>
+<details id="analysisTools"><summary>☰ Análisis y dibujo <span id="activeTool" class="muted">· cursor</span></summary><div class="analysis-content">  <aside id="lefttools">
+    <button data-tool="" class="tool active" title="Cursor (Esc)">✛ Cursor</button>
+    <button data-tool="trend" class="tool" title="Línea de tendencia">╱ Tendencia</button>
+    <button data-tool="hline" class="tool" title="Línea horizontal">― Horizontal</button>
+    <button data-tool="vline" class="tool" title="Línea vertical">│ Vertical</button>
+    <button data-tool="long" class="tool" title="Long: clic entrada, stop y objetivo (solo dibujo)">L↑ Long</button>
+    <button data-tool="short" class="tool" title="Short: clic entrada, stop y objetivo (solo dibujo)">S↓ Short</button>
+    <button data-tool="arrow" class="tool" title="Flecha: origen y destino">➚ Flecha</button>
+    <button data-tool="channel" class="tool" title="Canal paralelo (3 clics)">⫽ Canal</button>
+    <button data-tool="rect" class="tool" title="Rectángulo / zona">▭ Zona</button>
+    <button data-tool="fib" class="tool" title="Retroceso de Fibonacci">ℱ Fibonacci</button>
+    <button data-tool="text" class="tool" title="Texto">T Texto</button>
+    <button data-tool="ray" class="tool" title="Rayo (semi-infinito desde punto)">⇢ Rayo</button>
+    <button data-tool="extended" class="tool" title="Línea extendida (infinita a ambos lados)">↔ Extendida</button>
+    <button data-tool="measure" class="tool" title="Regla: mide precio, % y velas">📏 Medir</button>
+    <button data-tool="rect" data-color="#ef5350" class="tool" title="Zona de oferta">Oferta</button>
+    <button data-tool="rect" data-color="#26a69a" class="tool" title="Zona de demanda">Demanda</button>
+    <button id="undoBtn" class="tool" title="Deshacer último dibujo (Ctrl+Z)">↩</button>
+    <span class="tsep"></span>
+    <button id="toggleDraw" class="tool" title="Ocultar/mostrar dibujos">👁</button>
+    <button id="toggleSmc" class="tool on" title="Ocultar/mostrar capas SMC">SMC</button>
+    <button id="clearDraw" class="tool" title="Borrar los dibujos de este gráfico">🗑</button>
+  </aside>  <details class="chart-manager"><summary>Indicadores y capas</summary><div class="manager-box"><p>Estos controles se aplican a todos los paneles de esta sesión.</p><p id="layerStatus" aria-live="polite"></p>
+    <label><input type="checkbox" data-layer="ema20"> EMA 20</label>
+    <label><input type="checkbox" data-layer="ema50"> EMA 50</label>
+    <label><input type="checkbox" data-layer="smc"> Estructura SMC</label>
+    <label><input type="checkbox" data-layer="macro"> Niveles y canal H3</label>
+    <label><input type="checkbox" data-layer="quotes"> Líneas BID/ASK</label>
+    <label><input type="checkbox" data-layer="trades"> Operaciones</label>
+    <button id="removeIndicators">Quitar indicadores del gráfico</button>
+  </div></details>
+  <details class="chart-manager"><summary>Objetos</summary><div class="manager-box">
+    <button id="deleteSelected">Borrar seleccionado</button><div id="objectList">Carga una práctica</div>
+  </div></details>
+  <label class="drawing-setting"><input id="drawLock" type="checkbox"> Bloquear movimiento de trazos</label><label class="drawing-setting"><input id="drawMagnet" type="checkbox"> Imán a vela / OHLC</label><span class="drawing-note">Trazos compartidos entre temporalidades de esta práctica · anclas UTC y precio</span>
+  <button id="followLatest" class="pill-btn" title="Seguir la última vela; mover el gráfico desactiva el seguimiento">Seguir última vela</button><button id="strategyView" class="pill-btn">Estrategia · 1D / 4H / 15m</button><label class="drawing-setting"><input id="linkTime" type="checkbox"> Sincronizar fechas y zoom</label><span class="drawing-note">Día completo de cotización: 1D = 6 × 4H = 96 × 15m. Los huecos se conservan.</span><button id="scalpView" class="pill-btn" title="Vista H3 + 15m + 5m + 1m (base M1)">1m · 5m · 15m</button>
+  <button id="immersiveBtn" class="pill-btn" title="Más espacio de gráfico; ocultar paneles auxiliares">Inmersión</button>
+  <button id="fitBtn" class="icon" title="Ajustar zoom (Alt+R)">⤢</button>
+</div></details>
+
+
+<div id="main">
+  <!-- ===================== herramientas de dibujo (izquierda) ===================== -->
+
+
+  <!-- ===================== centro: gráficos + replay + panel inferior ===================== -->
+  <section id="center">
+    <div id="grid" class="l1"></div>
+    <div id="empty" class="empty" hidden>
+      <h2>Sin pestañas abiertas</h2><p>Abre una pestaña para empezar a practicar.</p>
+      <button class="primary big" id="emptyAdd">+ Nueva pestaña</button>
+    </div>
+
+    <div id="replaybar">
+      <div class="dropdown up">
+        <button id="selBarBtn" title="Elegir dónde empieza el replay">⇤ Seleccionar barra ⌄</button>
+        <div class="menu" id="selBarMenu">
+          <button data-sel="pick">Seleccionar barra en el gráfico</button>
+          <button data-sel="random">Fecha aleatoria (práctica a ciegas)</button>
+          <button data-sel="date">Elegir fecha…</button>
+        </div>
+      </div>
+      <span class="vsep"></span>
+      <button id="bPrev" class="icon" title="Vela anterior (←)">⏴</button>
+      <button id="bPlay" class="icon big" title="Play / pausa (Espacio)">▶</button>
+      <button id="bNext" class="icon" title="Siguiente vela (→)">⏵❙</button>
+      <div class="dropdown up">
+        <button id="speedBtn" title="Velocidad">1x</button>
+        <div class="menu wide" id="speedMenu">
+          <input id="speed" type="range" min="0" max="1000" value="435">
+          <div class="presets"><button data-speed="0.5">0.5x</button><button data-speed="1">1x</button><button data-speed="3">3x</button>
+            <button data-speed="10">10x</button><button data-speed="30">30x</button><button data-speed="100">100x</button></div>
+        </div>
+      </div>
+      <span id="baseTfLbl" class="muted" title="Cada paso del replay avanza una vela de esta temporalidad">M5</span>
+      <span class="vsep"></span>
+      <button id="bNextTrade" class="icon" title="Siguiente operación del backtest">⏭</button>
+      <button id="bEnd" class="icon" title="Ir al final de los datos reales">⏩❙</button>
+      <span class="grow"></span>
+      <span id="clock" class="clock">—</span>
+      <button id="bReset" class="icon" title="Volver al inicio del replay (R)">⟲</button>
+    </div>
+
+    <div id="rangebar">
+      <button data-range="1D">1D</button><button data-range="5D">5D</button><button data-range="1M">1M</button>
+      <button data-range="3M">3M</button><button data-range="6M">6M</button><button data-range="YTD">YTD</button>
+      <button data-range="1A">1A</button><button data-range="5A">5A</button><button data-range="ALL">Todos</button>
+      <span class="vsep"></span>
+      <input id="goto" type="datetime-local" title="Ir a fecha (solo hacia atrás para mirar; hacia delante avanza vela a vela)">
+      <button id="bGoto">Ir</button>
+      <span class="grow"></span>
+      <span id="utc" class="muted"></span>
+    </div>
+
+    <div id="bottom" class="collapsed">
+      <div class="bhead">
+        <button id="bToggle" class="link">⏪ Trading simulado ⌄</button>
+        <div class="btabs">
+          <button class="btab active" data-b="pos">Posiciones</button>
+          <button class="btab" data-b="hist">Historial</button>
+          <button class="btab" data-b="journal">Diario</button>
+          <button class="btab" data-b="stats">Estadísticas</button>
+        </div>
+        <span class="grow"></span>
+        <span id="acctLine" class="muted"></span>
+        <button id="bCloseAll" class="small">Cerrar todas</button>
+      </div>
+      <div class="bbody">
+        <div class="bpane active" id="b-pos"><table id="tPos"></table></div>
+        <div class="bpane" id="b-hist"><table id="tHist"></table></div>
+        <div class="bpane" id="b-journal"><div id="journalBox"></div></div>
+        <div class="bpane" id="b-stats"><div id="statsBox" class="statgrid"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== panel derecho + rail de iconos ===================== -->
+  <aside id="rightpanel">
+    <div class="rhead"><b id="rtitle">Lista</b><span class="grow"></span><button id="rclose" class="icon" title="Minimizar panel">−</button></div>
+    <div class="rbody">
+      <!-- lista de pestañas -->
+      <div class="rp" id="rp-watch">
+        <table id="watch"></table>
+        <p class="muted small">Cada fila es una pestaña: su propio símbolo, replay, operaciones y backtest.</p>
+      </div>
+      <!-- operar -->
+      <div class="rp" id="rp-trade">
+        <div class="quote"><div class="qsell"><span>VENDER</span><b id="qBid">—</b></div><div class="qspread" id="qSpread">—</div>
+          <div class="qbuy"><span>COMPRAR</span><b id="qAsk">—</b></div></div>
+        <div class="form">
+          <div id="riskNotice" class="risk-notice" aria-live="polite"></div><label class="chk"><input id="useRisk" type="checkbox" checked> Lotaje por riesgo</label>
+          <label>Riesgo % <input id="risk" type="number" value="1" step="0.25" min="0.01" max="10"></label>
+          <label>Volumen <input id="volume" type="number" value="0.01" step="0.01" min="0.01"></label>
+          <label>Stop <select id="slMode"><option>POINTS</option><option>PRICE</option><option>PERCENT</option><option>ATR</option><option>STRUCTURE</option></select></label>
+          <label>Valor SL <input id="sl" type="number" value="300" step="any"></label>
+          <label>Objetivo <select id="tpMode"><option>R:R</option><option>PRICE</option><option>NONE</option></select></label>
+          <label>Valor TP <input id="tp" type="number" value="2" step="any"></label>
+          <label>Setup <select id="setup"><option>BOS+FVG</option><option>CHoCH</option><option>Order Block</option>
+            <option>Sweep de liquidez</option><option>Rango</option><option>Tendencia</option><option>Otro</option></select></label>
+          <label class="col">¿Por qué entro? <textarea id="note" rows="2" placeholder="Ej.: BOS alcista en H1, retroceso al FVG de M15…"></textarea></label>
+
+        </div>
+        <label>Vista de cálculo <select id="calcSide"><option value="BUY">Compra</option><option value="SELL">Venta</option></select></label>
+        <div class="kv" id="calc"></div>
+        <div class="row"><button id="bSell" class="sell">VENDER</button><button id="bBuy" class="buy">COMPRAR</button></div>
+        <hr><h3>Entradas programadas · simulación</h3>
+        <label>Precio de activación <input id="stopEntry" type="number" step="any" min="0" placeholder="Ej.: 4310.00" aria-describedby="stopEntryHelp"></label>
+        <p id="stopEntryHelp" class="muted small"></p><div class="row"><button id="stopFromBid">BID − 1 punto</button><button id="stopFromAsk">ASK + 1 punto</button></div><div class="row"><button id="sellStop" class="sell">SELL STOP</button><button id="buyStop" class="buy">BUY STOP</button></div>
+        <p class="muted small">Usa el SL, TP y riesgo de arriba. Activación en velas futuras; ASK para compra y BID para venta. Sin ticks: SL conservador y TP desde la vela siguiente.</p>
+        <p id="practiceNotice" class="muted small"></p><button id="practiceHere" class="wide">Nueva práctica desde aquí</button><p class="muted small">Reinicia balance y operaciones virtuales en la vela actual.</p><div id="pendingList"></div>
+        <div id="route" class="route">Destino: SIMULACIÓN</div>
+      </div>
+      <!-- aprender -->
+      <div class="rp" id="rp-learn">
+        <details open class="card"><summary>Entrenador · revisión del proceso</summary><div id="learningReview">Carga una práctica para revisar tu proceso.</div></details>
+        <div class="seg"><button class="lt active" data-l="see">Qué ve el motor</button><button class="lt" data-l="quiz">Reto</button>
+          <button class="lt" data-l="td">Top-Down</button><button class="lt" data-l="glos">Glosario</button></div>
+        <div class="lp active" id="lp-see"><p class="muted small">Lo que el motor SMC detecta <b>ahora</b> en el gráfico activo (nada del futuro). Clic = ir al punto.</p><div id="explain"></div></div>
+        <div class="lp" id="lp-quiz">
+          <p class="small">Mira el gráfico y decide: ¿dónde estará el precio dentro de <select id="qH"><option>6</option><option selected>12</option><option>24</option><option>48</option></select> velas?</p>
+          <div class="row"><button id="qUp" class="buy">▲ SUBE</button><button id="qDown" class="sell">▼ BAJA</button></div>
+          <button id="qReveal" class="wide">Revelar resultado</button>
+          <div id="quizStats" class="statgrid"></div><div id="quizHist"></div>
+        </div>
+        <div class="lp" id="lp-td"><p class="muted small">Estado de estructura de cada temporalidad (descriptivo, no es señal).</p><div id="topdown"></div></div>
+        <div class="lp" id="lp-glos"><div id="glossary"></div></div>
+      </div>
+      <!-- backtest -->
+      <div class="rp" id="rp-bt">
+        <div class="form">
+          <label>Estrategia <select id="btStrategy"><option value="GM_MACRO">GM Macro H3/H1/M15 · experimental (base M15)</option><option value="SMC_QUALITY">SMC calidad · experimental</option><option value="SMC_FVG">SMC FVG · referencia</option></select></label>
+          <label>Sesgo <select id="btBias"><option>M15</option><option selected>H1</option><option>H4</option><option>D1</option><option>W1</option></select></label>
+          <label>R:R <input id="btRR" type="number" value="2" step="0.5"></label>
+          <label>Riesgo % <input id="btRisk" type="number" value="0.25" step="0.25"></label>
+          <label>Buffer SL <input id="btBuf" type="number" value="20"></label>
+          <label>Balance <input id="btBal" type="number" value="10000"></label>
+          <label class="chk"><input id="btChallenge" type="checkbox"> Reto de capital en replay</label>
+          <label>Meta USD <input id="btGoal" type="number" value="100" min="1"></label>
+          <label>Plazo en días calendario <input id="btDays" type="number" value="3" min="0.1" max="30" step="0.1"></label>
+          <label>Spread <select id="btSpread"><option>HISTORICAL</option><option>FIXED</option></select></label>
+          <label>Spread fijo <input id="btFix" type="number" value="0"></label>
+          <label>Slippage <input id="btSlip" type="number" value="0"></label>
+          <label>Comisión/lote <input id="btComm" type="number" value="0" step="0.5"></label>
+          <label>Ambigüedad <select id="btAmb"><option>WORST_CASE</option><option>OPTIMISTIC</option><option>CONSERVATIVE</option><option>TICK_DATA</option></select></label>
+          <label class="chk"><input id="btSwap" type="checkbox" checked> Aplicar swap</label>
+          <label class="chk"><input id="btTicks" type="checkbox" disabled> Backtest OHLC conservador; secuencia de ticks pendiente</label>
+          <label class="chk"><input id="btShow" type="checkbox" checked> Mostrar en el gráfico</label>
+        </div>
+        <div class="row"><button id="btRun" class="primary">▶ Ejecutar</button><button id="btExport">Exportar</button></div>
+        <div id="btStatus" class="muted small"></div>
+        <div id="eqChart" class="mini"></div>
+        <table id="btStats"></table>
+        <table id="btTrades"></table>
+      </div>
+      <!-- real -->
+      <div class="rp" id="rp-real">
+        <p class="small">Esta edición está dedicada a investigación y entrenamiento. Todas las operaciones son virtuales.
+          LIVE consulta cotizaciones actuales de MT5. La ejecución real está deshabilitada.</p>
+        <button id="btnRealPos">Actualizar posiciones del sistema</button>
+        <table id="realPos"></table>
+      </div>
+      <!-- registros -->
+      <div class="rp" id="rp-logs"><pre id="logs"></pre></div>
+      <!-- ajustes -->
+      <div class="rp" id="rp-dashboard"></div>
+      <div class="rp" id="rp-set">
+        <h4>Capas SMC</h4><div class="checks" id="smcChecks"></div>
+        <div class="form">
+          <label>Swing izq. <input id="swL" type="number" value="5" min="1" max="50"></label>
+          <label>Swing der. <input id="swR" type="number" value="5" min="1" max="50"></label>
+          <label>Ruptura <select id="brk"><option>CLOSE</option><option>WICK</option></select></label>
+          <label>Tol. EQ % <input id="tol" type="number" value="0.03" step="0.01"></label>
+          <label>OB desplaz. <input id="obd" type="number" value="1" step="0.1"></label>
+          <label>Detectar RANGO <select id="rng"><option value="true">Sí</option><option value="false">No</option></select></label>
+        </div>
+        <button id="btnSmc" class="wide">Recalcular SMC</button>
+
+      </div>
+    </div>
+  </aside>
+  <nav id="rail">
+    <button data-rp="watch" title="Lista de pestañas">☰</button>
+    <button data-rp="trade" title="Operar">⇅</button>
+    <button data-rp="learn" title="Aprender">🎓</button>
+    <button data-rp="bt" title="Backtest">📈</button>
+    <button data-rp="real" title="Estado de ejecución: simulación">🔴</button>
+    <button data-rp="logs" title="Registros">🗒</button>
+    <span class="grow"></span>
+    <button data-rp="set" title="Ajustes">⚙</button>
+    <button data-rp="dash" title="Dashboard MT5 &amp; EAs">📊</button>
+    <button id="helpBtn" title="Atajos de teclado">?</button>
+  </nav>
+</div>
+
+<!-- ===================== diálogos ===================== -->
+<dialog id="loadDlg">
+  <form method="dialog" class="dlg">
+    <h3 id="loadTitle">Nueva pestaña</h3>
+    <div class="form two">
+      <label>Fuente <select id="src"><option>MT5</option><option>CSV</option><option>DEMO</option></select></label>
+      <label id="symWrap">Símbolo <input id="symbol" list="symbols" value="XAUUSD"><datalist id="symbols"></datalist></label>
+      <label id="fileWrap" hidden>Archivo <select id="file"></select></label>
+      <label>TF base <select id="baseTf"><option selected>M1</option><option>M5</option><option>M15</option></select></label>
+      <label>Velas <input id="nbars" type="number" value="20000" min="500" step="any"></label>
+      <label>Inicio replay <input id="start" type="datetime-local"></label>
+      <label class="chk"><input id="atEnd" type="checkbox"> Empezar al final de los datos</label>
+      <label>Deslizamiento simulado (puntos)<input id="practiceSlip" type="number" value="2" min="0" max="100000" step="0.1"></label>
+      <label>Comisión ida/vuelta por lote (divisa de cuenta)<input id="practiceComm" type="number" value="0" min="0" max="100000" step="0.1"></label>
+      <p class="muted">Spread histórico disponible; ejecución BUY a ASK y SELL a BID. Sin ticks, si SL y TP coinciden en una vela se aplica SL primero. Deslizamiento y comisión son supuestos configurables, no tarifas verificadas.</p>
+      <label>Capital virtual<input id="practiceBalance" type="number" value="10000" min="1" max="1000000000" step="100"></label>
+      <label class="chk" title="Al acabar los datos reales sigue con velas SINTÉTICAS (no es predicción)"><input id="synth" type="checkbox"> Continuar con mercado sintético</label>
+      <label>Semilla <input id="seed" type="number" value="0"></label>
+      <label>Volatilidad <input id="vol" type="number" value="1" step="any" min="0.1" max="5"></label>
+    </div>
+    <div class="row end"><button value="cancel">Cancelar</button><button value="ok" class="primary" id="loadOk">Abrir</button></div>
+  </form>
+</dialog>
+<dialog id="dlg"><form method="dialog" class="dlg"><pre id="dlgText"></pre><div id="dlgChecks"></div>
+  <div class="row end"><button value="no">Cancelar</button><button value="yes" class="primary" id="dlgYes">Confirmar</button></div></form></dialog>
+<div id="ctx" class="ctx" hidden><button data-act="delete">Eliminar</button><label>Color <input type="color" data-act="color" value="#2962ff"></label><button data-act="text">Editar texto</button></div>
+<div id="toast"></div>
+<script src="/static/dashboard.js?v=1.0"></script>
+<script src="/static/app.js?v=0.6.5"></script>
+
+</body>
+</html>
+
+
+
+

@@ -1,0 +1,3 @@
+# Librería oficial de MetaQuotes (solo Windows). 5.0.5120 verificada con
+# Control de aplicaciones activo; la 5.0.6231 tiene la DLL bloqueada.
+MetaTrader5==5.0.5120
