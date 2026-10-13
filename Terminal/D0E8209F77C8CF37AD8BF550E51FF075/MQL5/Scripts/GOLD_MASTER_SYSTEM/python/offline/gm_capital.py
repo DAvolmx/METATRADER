@@ -72,7 +72,9 @@ def pro_signals_trades(m1):
     m15 = resample(m1, "M15")
     f = go.features(m1[["time", "open", "high", "low", "close", "spread"]],
                     m15[["time", "open", "high", "low", "close", "spread"]])
-    P = dict(fast=34, slow=89, minscore=5, tp=1.5, slatr=1.2, be=1.5, lock=0.3,
+    # Config ROBUSTA de gm_research (positiva en real y en 5a sinteticos), no la
+    # que solo brillaba en 3,5 meses: fast=13/slow=89/minscore=5/tp=2.0.
+    P = dict(fast=13, slow=89, minscore=5, tp=2.0, slatr=1.2, be=1.5, lock=0.3,
              chdev=2.0, session=False, maxbars=240)
     res = sorted(go.simulate(f, P, go.signals(f, P), POINT), key=lambda x: x[0])
     t = pd.to_datetime(m1["time"]).dt.normalize().to_numpy()
