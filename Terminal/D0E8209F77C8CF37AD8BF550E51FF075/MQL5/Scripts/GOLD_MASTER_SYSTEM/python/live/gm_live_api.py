@@ -26,6 +26,7 @@ from pathlib import Path
 
 from fastapi import Body, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 try:
     from gm_guardian import GuardianConfig, Journal, RiskGovernor, learn_from_journal
@@ -88,6 +89,15 @@ def _mt5_ready() -> bool:
 # ───────────────────────── API ─────────────────────────
 app = FastAPI(title="GOLD MASTER Live API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.get("/", response_class=HTMLResponse)
+def home():
+    """Sirve el workstation en vivo en la misma raíz que el API (un solo uvicorn)."""
+    f = Path(__file__).resolve().parent / "workstation_live.html"
+    if f.exists():
+        return f.read_text(encoding="utf-8")
+    return "<h1>GOLD MASTER Live</h1><p>Falta workstation_live.html junto a gm_live_api.py.</p>"
 
 
 @app.get("/api/status")

@@ -82,6 +82,15 @@ class RiskGovernor:
         self._roll_day(now or datetime.now(timezone.utc))
         self.day_pnl += pnl_usd; self.day_trades += 1
 
+    def export_limits(self, bridge_dir) -> str:
+        """Escribe guardian.txt para que GoldMaster_Guardian.mqh (el EA) sincronice límites."""
+        p = Path(bridge_dir); p.mkdir(parents=True, exist_ok=True)
+        f = p / "guardian.txt"
+        f.write_text(f"news_blackout_min={self.cfg.news_blackout_min}\n"
+                     f"max_spread_points={self.cfg.max_spread_points}\n"
+                     f"max_risk_frac={self.cfg.max_risk_frac}\n", encoding="utf-8")
+        return str(f)
+
     def pretrade_score(self, ctx: dict) -> tuple[int, list[str]]:
         """0-100 según confluencia con el contexto. No bloquea solo; informa."""
         s = 50; w = []
