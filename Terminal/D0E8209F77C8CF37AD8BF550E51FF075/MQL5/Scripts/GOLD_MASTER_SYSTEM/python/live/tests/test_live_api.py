@@ -43,3 +43,14 @@ def test_reads_bridge_files(tmp_path):
     assert flow["source"] == "bridge" and flow["vpin"] == "0.38" and flow["dxy_corr"] == "-0.82"
     news = c.get("/api/news").json()
     assert news["source"] == "bridge" and news["events"][0]["event"] == "CPI"
+
+
+def test_guardian_endpoints(tmp_path):
+    c = _client(tmp_path / "gd")
+    dec = c.post("/api/guardian/evaluate", json={"equity": 20, "stop_distance": 4,
+                 "ctx": {"regime": "normal", "spread_points": 18}}).json()
+    assert dec["allow"] in (True, False) and "stage" in dec
+    rec = c.post("/api/journal", json={"symbol": "XAUUSD", "R": 1.2, "pnl_usd": 2.4,
+                 "ctx": {"regime": "calmo"}}).json()
+    assert rec["ok"] and rec["stats"]["n"] >= 1
+    assert c.get("/api/journal").json()["n"] >= 1

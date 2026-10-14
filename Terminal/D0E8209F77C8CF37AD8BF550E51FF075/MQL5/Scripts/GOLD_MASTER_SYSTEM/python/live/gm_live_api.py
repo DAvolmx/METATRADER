@@ -24,8 +24,16 @@ import os
 import time
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Body, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+try:
+    from gm_guardian import GuardianConfig, Journal, RiskGovernor, learn_from_journal
+    _GOV = RiskGovernor(GuardianConfig(symbol=os.getenv("GM_SYMBOL", "XAUUSD")))
+    _JOURNAL = Journal()
+    HAS_GUARDIAN = True
+except Exception:
+    HAS_GUARDIAN = False
 
 # --- MT5 opcional (solo Windows) ---
 try:
@@ -188,6 +196,41 @@ def snapshot():
             "positions": positions()["positions"], "quote": quote(), "dom": dom(),
             "flow": flow(), "forecast_available": (Path(__file__).resolve().parent.parent
             / "offline" / "out_offline" / "forecast.json").exists()}
+
+
+@app.post("/api/guardian/evaluate")
+def guardian_evaluate(payload: dict = Body(...)):
+    """Pre-trade: decide si se puede operar y con qué lote. body: {equity, stop_distance, ctx}."""
+    if not HAS_GUARDIAN:
+        return {"allow": False, "reason": "guardian no disponible"}
+    return _GOV.evaluate(float(payload.get("equity", 0)), float(payload.get("stop_distance", 0)),
+                         payload.get("ctx") or {})
+
+
+@app.post("/api/journal")
+def journal_record(trade: dict = Body(...)):
+    """Registra una operación con su contexto y actualiza los contadores del día."""
+    if not HAS_GUARDIAN:
+        return {"ok": False, "reason": "guardian no disponible"}
+    rec = _JOURNAL.record(trade)
+    if "pnl_usd" in trade:
+        _GOV.register_result(float(trade["pnl_usd"]))
+    return {"ok": True, "trade": rec, "stats": _JOURNAL.stats()}
+
+
+@app.get("/api/journal")
+def journal_stats():
+    if not HAS_GUARDIAN:
+        return {"n": 0}
+    return _JOURNAL.stats()
+
+
+@app.get("/api/guardian/learn")
+def guardian_learn():
+    """Entrena un modelo con TUS operaciones del diario (investigación)."""
+    if not HAS_GUARDIAN:
+        return {"trained": False, "reason": "guardian no disponible"}
+    return learn_from_journal(_JOURNAL)
 
 
 if __name__ == "__main__":
