@@ -136,10 +136,7 @@ class Pane {
     const sig = `${this.tf}|${items.length ? items[0].time : 0}|${theme()}`;
     if (full || sig !== this.lastSig) { this.series.setData(items); this.lastSig = sig; }
     else { try { items.slice(-Math.min(items.length, c.bars.length + 1)).forEach(it => this.series.update(it)); } catch (_) { this.series.setData(items); } }
-    const ema=(period)=>{const out=[];let value=null;const alpha=2/(period+1);
-      for(let i=0;i<bars.length;i++){const b=bars[i];value=value===null?b.close:alpha*b.close+(1-alpha)*value;
-        if(i>=period-1) out.push({time:b.time,value});}return out;};
-    this.ema20.setData(ema(20));this.ema50.setData(ema(50));
+    this.updateEmas(bars, full);
     const precision=S.state?.digits??2,step=S.state?.point??.01;
     this.series.applyOptions({priceFormat:{type:"price",precision,minMove:step}});
     this.itemsTimes = items.map(i => i.time);
@@ -147,6 +144,57 @@ class Pane {
     this.smc = c.smc || null;
     this.renderLegend();
     this.requestDraw();
+  }
+  // La EMA es una recurrencia: no hace falta recorrer el array entero cada vez.
+  // Se guarda el ultimo valor y el numero de velas ya incorporadas, y cuando el
+  // array solo ha CRECIDO se continua la recurrencia y se empujan los puntos
+  // nuevos con update(). Antes esto era un recalculo completo (hasta 5.000
+  // velas) mas un setData() integro por EMA y por panel en cada tick de replay.
+  updateEmas(bars, full) {
+    for (const [period, series, key] of [[20, this.ema20, "_ema20St"],
+                                         [50, this.ema50, "_ema50St"]]) {
+      const alpha = 2 / (period + 1);
+      const st = this[key];
+      const sig = bars.length ? bars[0].time : 0;
+      // solo es extension si el tramo ya incorporado sigue siendo el mismo
+      const extendable = !full && st && st.sig === sig && bars.length >= st.n
+        && st.n > 0 && bars[st.n - 1] && bars[st.n - 1].time === st.lastTime;
+      if (extendable) {
+        if (bars.length === st.n) continue;            // nada nuevo
+        let v = st.value;
+        for (let i = st.n; i < bars.length; i++) {
+          const b = bars[i];
+          v = v === null ? b.close : alpha * b.close + (1 - alpha) * v;
+          if (i >= period - 1) series.update({ time: b.time, value: v });
+        }
+        this[key] = { sig, n: bars.length, value: v,
+                      lastTime: bars[bars.length - 1].time };
+      } else {
+        const out = []; let v = null;
+        for (let i = 0; i < bars.length; i++) {
+          const b = bars[i];
+          v = v === null ? b.close : alpha * b.close + (1 - alpha) * v;
+          if (i >= period - 1) out.push({ time: b.time, value: v });
+        }
+        series.setData(out);
+        this[key] = { sig, n: bars.length, value: v,
+                      lastTime: bars.length ? bars[bars.length - 1].time : 0 };
+      }
+    }
+  }
+  // ¿este panel necesita repintarse en el latido periodico? Solo si tiene una
+  // animacion viva o si la ventana visible se ha movido. Los cambios de datos
+  // ya llaman a requestDraw() directamente, asi que el latido es una red de
+  // seguridad, no el motor del dibujado.
+  needsTick() {
+    if (this.destroyed) return false;
+    if (this.flash && this.flash.until > Date.now()) return true;
+    if (S.picking || S.showDraw) return true;
+    const r = this.chart.timeScale().getVisibleLogicalRange();
+    const sig = (r ? Math.round(r.from * 4) + ":" + Math.round(r.to * 4) : "0") +
+      "|" + this.host.clientWidth + "x" + this.host.clientHeight;
+    if (sig !== this._tickSig) { this._tickSig = sig; return true; }
+    return false;
   }
   renderLegend(b) {
     const st = S.state; if (!st || !st.loaded) return;
@@ -197,13 +245,22 @@ class Pane {
     g.restore();
   }
   line(g, x1, y1, x2, y2, c, w = 1, d = []) { if ([x1, y1, x2, y2].some(v => v === null || v === undefined)) return;
+    if (this._offY(y1, y2)) return;
     g.strokeStyle = c; g.lineWidth = w; g.setLineDash(d); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]); }
+  // Descarta lo que cae entero fuera del lienzo. Las zonas SMC (OB, FVG, rangos)
+  // se extienden hasta el borde derecho, asi que casi ninguna se recorta por x,
+  // pero muchisimas quedan fuera por PRECIO cuando se hace zoom: sin esta guarda
+  // el navegador rellenaba rectangulos invisibles uno por uno.
+  _offY(y1, y2) { const h = this.host.clientHeight;
+    return (Math.max(y1, y2) < 0) || (Math.min(y1, y2) > h); }
   rect(g, x1, y1, x2, y2, fill, stroke) { if ([x1, y1, x2, y2].some(v => v === null || v === undefined)) return;
+    if (this._offY(y1, y2)) return;
     g.fillStyle = fill; g.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1));
     if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1; g.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1)); } }
   text(g, s, x, y, c, al = "left", base = "bottom", bold = false) { if (x === null || y === null) return; g.fillStyle = c;
     g.font = `${bold ? "600 " : ""}11px -apple-system, Segoe UI, sans-serif`; g.textAlign = al; g.textBaseline = base; g.fillText(s, x, y); }
-  label(g, s, x, y, bg, fg = "#fff") { if (x === null || y === null) return; g.font = "600 11px Segoe UI, sans-serif";
+  label(g, s, x, y, bg, fg = "#fff") { if (x === null || y === null) return;
+    if (this._offY(y, y)) return; g.font = "600 11px Segoe UI, sans-serif";
     const w = g.measureText(s).width + 10; g.fillStyle = bg; g.fillRect(x, y - 9, w, 18); this.text(g, s, x + 5, y, fg, "left", "middle", true); }
   tri(g, x, y, up, c, s = 4) { if (x === null || y === null) return; g.fillStyle = c; g.beginPath();
     if (up) { g.moveTo(x, y - s); g.lineTo(x - s, y + s); g.lineTo(x + s, y + s); } else { g.moveTo(x, y + s); g.lineTo(x - s, y - s); g.lineTo(x + s, y - s); }
@@ -434,13 +491,21 @@ class Pane {
     this.requestDraw(); setTimeout(() => this.requestDraw(), 2600); }
 }
 
+let _saveTabsTimer=null;
+function saveTabsSoon(){ if(_saveTabsTimer) return;
+  _saveTabsTimer=setTimeout(()=>{_saveTabsTimer=null;saveTabs();},400); }
+
 // Ventana común por fechas, nunca por el mismo número de barras.
 function setCommonWindow(from,to,source=null,fitHistory=false){
  const ready=S.panes.filter(p=>p.itemsTimes.length);if(!ready.length||!Number.isFinite(from)||!Number.isFinite(to)||to<=from)return;
  const earliest=Math.max(...ready.map(p=>p.itemsTimes[0]));
  const end=Number(S.state?.clock)||Math.min(...ready.map(p=>p.itemsTimes.at(-1)+TF_SEC[p.tf]));
  if(fitHistory){from=Math.max(from,earliest);to=Math.min(to,end);}if(to<=from)return;
- S.timeWindow={from,to};const tab=tabObj(S.active);if(tab){tab.timeWindow=S.timeWindow;saveTabs();}
+ // El estado en memoria se actualiza al instante; la ESCRITURA se difiere.
+ // saveTabs() serializa todas las pestanas y escribe en localStorage de forma
+ // sincrona, y aqui se llamaba en cada evento de rango: arrastrar el grafico
+ // provocaba del orden de 60-120 escrituras bloqueantes por segundo.
+ S.timeWindow={from,to};const tab=tabObj(S.active);if(tab){tab.timeWindow=S.timeWindow;saveTabsSoon();}
  S.rangeSync=true;
  try{for(const p of ready)if(p!==source)p.chart.timeScale().setVisibleLogicalRange({from:p.logicalOf(from),to:p.logicalOf(to)});}
  finally{S.rangeSync=false;}
@@ -1022,7 +1087,10 @@ function wire() {
   setInterval(pollSessions, 2500);
   setInterval(async () => { try { const s = await api("/api/monitor"); if (S.state) Object.assign(S.state, { mt5: s.mt5, account: s.account }); } catch (_) {} }, 4000);
   setInterval(async () => { if (!S.state || !S.state.live || S.busy) return; try { await sapi("/api/live/tick"); await refresh(false); } catch (e) { err(e); } }, 1000);
-  setInterval(() => S.panes.forEach(p => p.requestDraw()), 500);
+  // Latido de refresco: solo toca los paneles que lo necesitan. Antes repintaba
+  // los ~550 primitivos SMC de cada panel (hasta ~2.200 con rejilla de 4) dos
+  // veces por segundo aunque no hubiese cambiado nada en pantalla.
+  setInterval(() => { for (const p of S.panes) if (p.needsTick()) p.requestDraw(); }, 500);
   setSpeed(1);if(store.get("panelOpen",false))openRp(S.rp);else $("#rclose").click();
   // restaurar pestañas
   renderTabs(); pollSessions();

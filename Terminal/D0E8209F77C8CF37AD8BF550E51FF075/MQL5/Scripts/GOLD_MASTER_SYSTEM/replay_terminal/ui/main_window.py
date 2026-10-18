@@ -554,8 +554,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.warning(self, "TF", f"{tf} no se puede derivar de {self.replay.base_tf}")
                 return
             if tf not in self.replay.chart_tfs:
-                self.replay.chart_tfs.append(tf)
-                self.replay._resampled_upto = -1
+                self.replay.ensure_timeframe(tf)
                 self._rebuild_smc()
             else:
                 self._refresh()
@@ -667,7 +666,7 @@ class MainWindow(QtWidgets.QMainWindow):
             tf = ch.timeframe
             if tf not in r.chart_tfs:
                 continue
-            df = r.visible(tf).tail(MAX_BARS_DRAWN)
+            df = r.visible(tf, limit=MAX_BARS_DRAWN)
             changed = ch.set_bars(df, r.forming(tf))
             key = (changed, tuple(sorted(opts.items())), self._smc_version)
             if changed or getattr(ch, "_smc_key", None) != key[1:]:

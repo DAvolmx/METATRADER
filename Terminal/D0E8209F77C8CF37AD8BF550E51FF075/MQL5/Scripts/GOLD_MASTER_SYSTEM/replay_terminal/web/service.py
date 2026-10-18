@@ -105,6 +105,11 @@ SESSION_ATTRS = ("spec", "replay", "engines", "aggs", "fed_idx", "paper", "paper
 class TradingService:
     def __init__(self, db_path: Optional[Path] = None, mt5_enabled: bool = True) -> None:
         self._exec = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ldz-core")
+        #: vigilante de conexión: hilo propio para que la E/S con el broker no
+        #: ocupe el hilo único del núcleo (ver monitor()).
+        self._mon_thread: Optional[threading.Thread] = None
+        self._mon_stop = threading.Event()
+        self._mon_interval = 4.0
         self._compute = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ldz-bt")
         self.state = AppState()
         self.state.mode = AppMode.REPLAY
@@ -180,6 +185,7 @@ class TradingService:
                 if self.db:
                     self.db.close()
         self.run(_close)
+        self._mon_stop.set()
         self._exec.shutdown(wait=False)
         self._compute.shutdown(wait=False)
 
@@ -205,26 +211,62 @@ class TradingService:
         return self.status()
 
     def monitor(self) -> dict:
-        """Llamado periódicamente por el navegador: detecta desconexión y cambio de cuenta."""
-        if self.connector.account is None:
-            return self.status()
-        prev = self.connector.account
-        st, acc = self.connector.ping()
-        if st == ConnectionState.ACCOUNT_CHANGED:
-            if self.live_exec:
-                self.live_exec.kill_switch()
-            self.state.unlock_trading()
-            self._set_mode(AppMode.LIVE if self.live else self.state.mode)
-            self._notify("warning", f"CAMBIO DE CUENTA DETECTADO: {prev.login}@{prev.server} -> "
-                                    f"{acc.login}@{acc.server}. Trading real bloqueado: vuelve a autorizar.")
-        elif st == ConnectionState.DISCONNECTED:
-            self.state.lock_trading()
-            s2, _ = self.connector.connect()
-            if s2 == ConnectionState.CONNECTED:
-                self.state.unlock_trading()
-            else:
-                self._notify("warning", "MT5 desconectado: RECONNECTING… (LIVE TRADING = LOCKED)")
+        """Estado de conexión para el navegador. NO hace E/S con el broker.
+
+        Antes esta función hacía `connector.ping()` —y en caso de caída incluso
+        un `connect()` completo— en el HILO ÚNICO del núcleo, el mismo que sirve
+        /api/frame. Como el navegador la sondea cada 4 s, el gráfico se quedaba
+        congelado con esa cadencia esperando un viaje de ida y vuelta al broker.
+
+        El hilo único NO es el problema y no se toca: existe para serializar las
+        mutaciones del motor de replay, y repartirlas entre varios hilos
+        introduciría carreras sobre un estado mutable. Lo que se mueve es la E/S:
+        un hilo propio sondea al broker y solo delega al núcleo la MUTACIÓN de
+        estado cuando de verdad hay un cambio, que es algo excepcional.
+        """
+        self._ensure_monitor()
         return self.status()
+
+    def _ensure_monitor(self) -> None:
+        """Arranca (una sola vez) el hilo que vigila la conexión con el broker."""
+        if self._mon_thread is not None and self._mon_thread.is_alive():
+            return
+        if not self.mt5_enabled:
+            return
+        self._mon_stop.clear()
+        t = threading.Thread(target=self._monitor_loop, name="ldz-monitor", daemon=True)
+        self._mon_thread = t
+        t.start()
+
+    def _monitor_loop(self) -> None:
+        while not self._mon_stop.is_set():
+            try:
+                prev = self.connector.account
+                if prev is not None:
+                    st, acc = self.connector.ping()          # bloqueante, fuera del núcleo
+                    if st == ConnectionState.ACCOUNT_CHANGED:
+                        self.run(self._apply_account_changed, prev, acc)
+                    elif st == ConnectionState.DISCONNECTED:
+                        self.run(self.state.lock_trading)
+                        s2, _ = self.connector.connect()     # bloqueante, fuera del núcleo
+                        if s2 == ConnectionState.CONNECTED:
+                            self.run(self.state.unlock_trading)
+                        else:
+                            self.run(self._notify, "warning",
+                                     "MT5 desconectado: RECONNECTING… (LIVE TRADING = LOCKED)")
+            except Exception:
+                # un fallo del broker no debe tumbar el vigilante
+                pass
+            self._mon_stop.wait(self._mon_interval)
+
+    def _apply_account_changed(self, prev, acc) -> None:
+        """Mutación de estado por cambio de cuenta. Corre en el hilo del núcleo."""
+        if self.live_exec:
+            self.live_exec.kill_switch()
+        self.state.unlock_trading()
+        self._set_mode(AppMode.LIVE if self.live else self.state.mode)
+        self._notify("warning", f"CAMBIO DE CUENTA DETECTADO: {prev.login}@{prev.server} -> "
+                                f"{acc.login}@{acc.server}. Trading real bloqueado: vuelve a autorizar.")
 
     def status(self) -> dict:
         acc = self.connector.account
@@ -430,11 +472,9 @@ class TradingService:
         if tf not in self.replay.chart_tfs or tf not in self.engines:
             if not is_derivable(tf, self.replay.base_tf):
                 raise ServiceError(f"{tf} no se puede derivar de {self.replay.base_tf}")
-            if tf not in self.replay.chart_tfs:
-                self.replay.chart_tfs.append(tf)
-            self.replay._resampled_upto = -1
+            self.replay.ensure_timeframe(tf)
             self._rebuild_smc()
-        df = self.replay.visible(tf).tail(int(limit))
+        df = self.replay.visible(tf, limit=int(limit))
         t = epoch_s(df["time"]) if len(df) else np.array([], dtype=int)
         syn = df["synthetic"].to_numpy(bool) if "synthetic" in df else np.zeros(len(df), bool)
         rows = [{"time": int(t[i]), "open": float(o), "high": float(h), "low": float(l), "close": float(c),
