@@ -1,0 +1,46 @@
+ECUACIÓN MAESTRA DEL ORO — XAUUSD H1, 2004-06-11 08:00:00 → 2025-06-06 06:00:00 (122,027 barras)
+
+  d ln S = μ dt + σ(t)·s(h) dW + J dN(λ)
+
+  L1 secular     ln S* = 6.4333 + 0.06484·t     (R²=0.743, deriva 6.48%/año)
+  L2 cíclica     dε = −0.4776·ε dt                  (vida media 1.45 años, ADF p=0.263)
+  L3 volatilidad σ²ₜ = 1.063e-03 + 0.0500·u²ₜ₋₁ + 0.9300·σ²ₜ₋₁,  t(ν=4.4)
+                 persistencia α+β = 0.9800,  vol incond. 0.2305%/barra (17.6%/año)
+  L4 saltos      λ = 28.5/año sobre umbral 4σ,  exceso ~ GPD(ξ=0.212, β=0.288%),  53% al alza
+  Regímenes      calmo: σ×0.66, λ=10/año, π=0.45, dura 2d,  normal: σ×0.86, λ=31/año, π=0.32, dura 2d,  agitado: σ×1.56, λ=61/año, π=0.23, dura 12d
+
+VALIDACIÓN (medida, no afirmada)
+==============================================================================
+en muestra = params train, datos train · fuera muestra = params train,
+datos 2020-2025 nunca vistos · completo = el modelo que se despliega
+------------------------------------------------------------------------------
+métrica                                  en muestra  fuera muestra     completo
+resid_ks_pvalue                              0.0000         0.0000       0.0000
+resid_kurtosis                              16.2760        54.4371      18.7110
+ljungbox_z_p                                 0.0000         0.0108       0.0000
+ljungbox_z2_p                                0.0000         0.9997       0.0000
+vol_forecast_r2                              0.0540         0.0066       0.0466
+vol_spearman                                 0.3151         0.2253       0.2939
+direction_auc                                0.5057         0.4980       0.4900
+direction_hit_pct                           50.1732        50.5360      49.6976
+real_vol_annual_pct                         17.8797        15.0362      17.2240
+sim_vol_annual_pct                          18.4166        18.5690      17.3938
+real_kurtosis                               24.5855        19.0380      24.3203
+sim_kurtosis                                32.7436        32.8953      38.0621
+real_skew                                   -0.1724        -0.5627      -0.2378
+sim_skew                                    -0.0103         0.0107      -0.0343
+real_acf_abs_1                               0.2722         0.2472       0.2689
+sim_acf_abs_1                                0.2525         0.2527       0.2576
+real_acf_abs_24                              0.1903         0.1304       0.1810
+sim_acf_abs_24                               0.2203         0.2183       0.2210
+real_acf_abs_120                             0.0955         0.0333       0.0862
+sim_acf_abs_120                              0.1273         0.1245       0.1352
+real_max_dd_pct                            -45.2452       -21.9102     -45.2452
+sim_max_dd_p50_pct                         -44.0711       -33.6133     -33.6897
+sim_max_dd_p05_pct                         -66.5418       -54.9647     -48.3597
+sim_max_dd_p95_pct                         -30.5113       -20.6458     -23.8534
+real_dd_inside_sim_band                          sí             sí           sí
+sim0_max_dd_p50_pct                        -51.1802       -38.1702     -39.1583
+sim0_max_dd_p05_pct                        -74.7776       -60.3293     -58.9065
+sim0_max_dd_p01_pct                        -84.1382       -72.0751     -66.9338
+real_dd_inside_sim0_band                         sí             sí           sí
