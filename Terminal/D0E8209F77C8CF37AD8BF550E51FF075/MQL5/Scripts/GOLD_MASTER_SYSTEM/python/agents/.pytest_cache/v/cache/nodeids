@@ -1,0 +1,17 @@
+[
+  "tests/test_agents.py::test_agentes_sin_datos_no_explotan",
+  "tests/test_agents.py::test_ciclo_aisla_fallos",
+  "tests/test_agents.py::test_contexto_recuerda_refutados",
+  "tests/test_agents.py::test_contexto_ultimo_por_agente",
+  "tests/test_agents.py::test_contexto_umbral_sigue_a_la_boveda",
+  "tests/test_agents.py::test_critico_detecta_contradicciones",
+  "tests/test_agents.py::test_critico_escribe_preguntas_abiertas",
+  "tests/test_agents.py::test_registro_completo",
+  "tests/test_vault.py::test_crea_estructura",
+  "tests/test_vault.py::test_indice_refleja_el_estado",
+  "tests/test_vault.py::test_log_experiment_y_recuento",
+  "tests/test_vault.py::test_notas_en_subcarpeta_correcta",
+  "tests/test_vault.py::test_roundtrip_frontmatter",
+  "tests/test_vault.py::test_umbral_nunca_divide_por_cero",
+  "tests/test_vault.py::test_umbral_se_endurece_con_las_pruebas"
+]
