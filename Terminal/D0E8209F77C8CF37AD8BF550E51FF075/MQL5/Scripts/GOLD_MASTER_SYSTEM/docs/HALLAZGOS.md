@@ -140,7 +140,56 @@ Tres consecuencias prácticas:
    oro y dólar no tiene base estadística. El pico en rezago 0 confirma que
    ninguno de los dos adelanta al otro de forma aprovechable.
 
-## 6. El problema real nunca fue la señal: era el tamaño de la posición
+## 6. El sentimiento describe el estado; no lo anticipa
+
+Se construyó un índice con nueve internos derivados del precio (tendencia,
+momento, miedo, sesgo, drawdown, expansión, estrés, sesiones, intensidad) más
+las fuentes externas disponibles, cada componente normalizado por su propia
+historia.
+
+| Horizonte | Acierto fuera de muestra | σ sobre azar |
+|---|---|---|
+| 1 día | 50,66 % | +0,53 |
+| 5 días | 48,86 % | −0,91 |
+| 20 días | 48,41 % | −1,26 |
+
+Sin capacidad predictiva. Es el resultado esperado y honesto: un índice
+construido con el precio es, por definición, una función del precio. Sirve como
+**contexto** —saber si el mercado está en miedo o en complacencia, y que eso
+signifique siempre lo mismo— no como señal de entrada.
+
+## 7. El posicionamiento COT tampoco predice
+
+40 años de Commitments of Traders de la CFTC (1986-01 → 2026-10, 1.938
+observaciones semanales del contrato COMEX 088691), validados contra una
+segunda fuente independiente con **170/170 coincidencias exactas** en las
+semanas solapadas.
+
+El neto no comercial se normaliza por interés abierto, porque 300.000 contratos
+netos no significan lo mismo con un interés abierto de 200.000 que de 600.000.
+
+| Variable | Horizonte | Acierto | σ |
+|---|---|---|---|
+| neto/OI (z) | 1 semana | 53,85 % | +1,44 |
+| neto/OI (z) | 4 semanas | 54,13 % | +1,55 |
+| neto/OI (z) | 12 semanas | 53,28 % | +1,23 |
+| variación | 4 semanas | 52,99 % | +1,12 |
+
+Ninguno alcanza los 2σ. Y hay una señal de alarma más clara que el σ: la
+correlación entre posicionamiento y retorno futuro **cambia de signo** entre el
+tramo de entrenamiento y el de prueba (−0,015 → +0,009 a una semana; −0,001 →
++0,141 a doce). Una relación que invierte su signo entre periodos no es una
+relación: es ruido con buena prensa.
+
+Añadir el COT al compuesto de sentimiento **empeora** su acierto (de +0,53σ a
+−0,78σ a un día), lo que es coherente con que no aporte información.
+
+> Trampa de los datos, documentada por si reutilizas la fuente: los ficheros
+> públicos de "GOLD" de la CFTC mezclan tres contratos distintos (COMEX 088691,
+> International Monetary Market, y el de 100 onzas del CBOT). Sin filtrar salen
+> 120 fechas duplicadas y un interés abierto incoherente. `load_cot()` lo avisa.
+
+## 8. El problema real nunca fue la señal: era el tamaño de la posición
 
 Medido con bootstrap por bloques (20.000 remuestreos, que conserva la
 agrupación temporal de las operaciones y por tanto no subestima el drawdown):
@@ -156,7 +205,7 @@ en micro, el lote mínimo obliga a arriesgar más de lo admisible**. El gobernad
 de riesgo lo bloquea con un mensaje explícito en vez de dejarte operar al 50 %
 por operación. La vía es cuenta cent, o capitalizar antes de operar.
 
-## 7. Límites conocidos de la ecuación maestra
+## 9. Límites conocidos de la ecuación maestra
 
 Dicho aquí para que nadie los descubra con dinero puesto:
 
@@ -177,7 +226,7 @@ Dicho aquí para que nadie los descubra con dinero puesto:
   rechaza (p < 0,05): queda una componente lineal pequeña. No es aprovechable
   direccionalmente (AUC ≈ 0,49); probablemente microestructura a H1.
 
-## 8. Lo que este sistema sí te da
+## 10. Lo que este sistema sí te da
 
 Ninguna de estas cosas es una promesa de beneficio. Todas son útiles.
 

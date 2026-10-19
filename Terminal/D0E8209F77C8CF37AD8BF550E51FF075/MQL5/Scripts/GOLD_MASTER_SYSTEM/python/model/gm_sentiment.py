@@ -180,6 +180,51 @@ def internals(df: pd.DataFrame, cfg: SentimentConfig | None = None) -> pd.DataFr
     return out
 
 
+def load_cot(path: str | Path, oi_normalise: bool = True) -> pd.DataFrame:
+    """Carga un CSV de posicionamiento COT de la CFTC y lo deja listo.
+
+    Normaliza por interés abierto por defecto, y no es un detalle: 300.000
+    contratos netos NO significan lo mismo con un interés abierto de 200.000
+    que de 600.000. Sin normalizar, la serie mide sobre todo el crecimiento del
+    mercado a lo largo de 40 años, no el posicionamiento.
+
+    AVISO sobre la fuente: los ficheros públicos de "GOLD" de la CFTC mezclan
+    varios contratos (COMEX 088691, International Monetary Market, y el de 100
+    onzas del CBOT). Si tu CSV trae una columna de contrato o de código, fíltralo
+    a COMEX 088691 antes de usarlo: sin filtrar salen fechas duplicadas y el
+    interés abierto se vuelve incoherente.
+    """
+    df = pd.read_csv(path)
+    col_date = next((c for c in df.columns
+                     if c.strip().lower() in ("date", "fecha", "report_date")), None)
+    if col_date is None:
+        raise ValueError(f"{Path(path).name}: no encuentro columna de fecha")
+    df[col_date] = pd.to_datetime(df[col_date], errors="coerce")
+    df = df.dropna(subset=[col_date]).set_index(col_date).sort_index()
+
+    net = next((c for c in df.columns if "net" in c.lower()), None)
+    if net is None:
+        lg = next((c for c in df.columns if "long" in c.lower()), None)
+        sh = next((c for c in df.columns if "short" in c.lower()), None)
+        if lg and sh:
+            df["NonComm_Net"] = pd.to_numeric(df[lg], errors="coerce") - \
+                                pd.to_numeric(df[sh], errors="coerce")
+            net = "NonComm_Net"
+        else:
+            raise ValueError(f"{Path(path).name}: ni columna neta ni long/short")
+
+    out = pd.DataFrame(index=df.index)
+    val = pd.to_numeric(df[net], errors="coerce")
+    oi = next((c for c in df.columns
+               if "open" in c.lower() and "interest" in c.lower()), None)
+    if oi_normalise and oi:
+        oi_v = pd.to_numeric(df[oi], errors="coerce").replace(0.0, np.nan)
+        out["cot_net"] = val / oi_v
+    else:
+        out["cot_net"] = val
+    return out.dropna()
+
+
 def attach_external(ints: pd.DataFrame, cot: pd.DataFrame | None = None,
                     dxy: pd.DataFrame | None = None,
                     cfg: SentimentConfig | None = None) -> tuple[pd.DataFrame, list[str]]:
@@ -350,4 +395,4 @@ def snapshot(df: pd.DataFrame, cot: pd.DataFrame | None = None,
 
 
 __all__ = ["SentimentConfig", "SIGNOS", "internals", "attach_external",
-           "composite", "validate", "snapshot", "etiqueta"]
+           "composite", "validate", "snapshot", "etiqueta", "load_cot"]
