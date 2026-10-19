@@ -10,6 +10,15 @@
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
+#include <GoldMaster\GoldMaster_LotGuard.mqh>
+
+//--- Guarda de lote (GoldMaster_LotGuard.mqh) -----------------------
+// El suelo de lote minimo del broker puede forzar MUCHO mas riesgo del
+// planeado sin avisar. Estos dos limites hacen que el EA prefiera NO
+// operar antes que operar con un riesgo que no eligio el usuario.
+input double InpLG_MaxRiskPct    = 5.0;  // Guarda: riesgo max. por operacion (% equity, 0=off)
+input double InpLG_MaxOverTarget = 2.0;  // Guarda: multiplo max. del riesgo objetivo (0=off)
+
 
 CTrade        trade;
 CPositionInfo posInfo;
@@ -540,15 +549,12 @@ double CalculateLots(double slDistance)
 
    if(tickVal <= 0 || tickSize <= 0) return 0;
 
-   double lotsCalc = riskAmount / (slDistance / tickSize * tickVal);
-
-   double minLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-   double maxLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-   double stepLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-
-   lotsCalc = MathFloor(lotsCalc / stepLot) * stepLot;
-   lotsCalc = MathMax(lotsCalc, minLot);
-   lotsCalc = MathMin(lotsCalc, maxLot);
+   // El dimensionado y el techo de riesgo los decide la guarda compartida:
+   // devuelve 0 si el lote minimo obligaria a arriesgar mas de lo permitido.
+   double lotsCalc = GMLotGuard(slDistance, riskAmount,
+                                InpLG_MaxRiskPct, InpLG_MaxOverTarget,
+                                "GRIDOP", !ShowLogs);
+   if(lotsCalc <= 0.0) return 0;
 
    if(ShowLogs) Print("Lotaje calculado: ", lotsCalc, " | Riesgo $", DoubleToString(riskAmount, 2),
                       " | SL dist: ", DoubleToString(slDistance / pipValue, 1), " pips");

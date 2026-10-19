@@ -6,6 +6,15 @@
 #property version   "1.00"
 
 #include <Trade/Trade.mqh>
+#include <GoldMaster\GoldMaster_LotGuard.mqh>
+
+//--- Guarda de lote (GoldMaster_LotGuard.mqh) -----------------------
+// El suelo de lote minimo del broker puede forzar MUCHO mas riesgo del
+// planeado sin avisar. Estos dos limites hacen que el EA prefiera NO
+// operar antes que operar con un riesgo que no eligio el usuario.
+input double InpLG_MaxRiskPct    = 5.0;  // Guarda: riesgo max. por operacion (% equity, 0=off)
+input double InpLG_MaxOverTarget = 2.0;  // Guarda: multiplo max. del riesgo objetivo (0=off)
+
 CTrade trade;
 
 //======================= INPUTS =====================================
@@ -211,7 +220,7 @@ double CalculateLot(double entry,double stop)
    double distance = MathAbs(entry-stop);
 
    if(distance <= 0)
-      return MinLotManual;
+      return 0.0;   // fallo de datos: NO operar (antes devolvia un lote operable)
 
    double tickSize =
       SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
@@ -220,15 +229,24 @@ double CalculateLot(double entry,double stop)
       SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_VALUE);
 
    if(tickSize <= 0 || tickValue <= 0)
-      return MinLotManual;
+      return 0.0;   // fallo de datos: NO operar (antes devolvia un lote operable)
 
    double moneyPerLot =
       (distance/tickSize)*tickValue;
 
    if(moneyPerLot <= 0)
-      return MinLotManual;
+      return 0.0;   // fallo de datos: NO operar (antes devolvia un lote operable)
 
-   double lot = riskMoney/moneyPerLot;
+   // La guarda decide el lote y bloquea (devuelve 0) si el lote minimo
+   // forzaria mas riesgo del planeado. NormalizeLot solo redondea.
+   // MinLotManual se le pasa a la guarda: este EA puede imponer un minimo
+   // MAYOR que el del broker, y NormalizeLot lo aplicaria despues. Sin
+   // decirselo, la guarda aprobaria un lote que luego se subiria por encima
+   // del techo de riesgo.
+   double lot = GMLotGuard(distance, riskMoney,
+                           InpLG_MaxRiskPct, InpLG_MaxOverTarget,
+                           "XAU_M1_SCALPER", false, "", MinLotManual);
+   if(lot <= 0.0) return 0.0;
 
    return NormalizeLot(lot);
 }

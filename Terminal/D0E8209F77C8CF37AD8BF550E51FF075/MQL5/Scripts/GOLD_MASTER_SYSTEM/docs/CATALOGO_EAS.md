@@ -48,14 +48,48 @@ puente están en [`ARQUITECTURA.md`](ARQUITECTURA.md).
 | BR-02 | `Experts/BRIDGE_PYTHON/TALOS_Bridge_JSON_MT5_Python.mq5:26`, `:28`, `:240` | Ejecuta órdenes reales por defecto (`InpDemoMode=false`) con lote de hasta 5.0 dictado por un fichero que **nada en el repositorio escribe** |
 | BR-03 | `Experts/SMC_MULTI_ACTIVO/HUGOx_StructuralBreakout_Zones.mq5:52`, `:396`, `:437` | `AllowMultiplePositions=true` por defecto **sin tope** de posiciones simultáneas |
 | BR-04 | `Experts/SMC_MULTI_ACTIVO/HUGOx_StructuralBreakout_Zones.mq5:19`, `:20` | SL 150 pips > TP 100 pips: relación riesgo/beneficio 1:0,67 fijada en los valores por defecto |
-| BR-05 | `Experts/SCALPER_M1_M5/GRIDOP_ScalperPro_BOS_RSI7_Sesiones.mq5:550` | Suelo de lote mínimo **sin tope de riesgo**: `MathMax(lotsCalc, minLot)` |
-| BR-06 | `Experts/SCALPER_M1_M5/XAU_M1_SCALPER_EMA_ADX_RSI.mq5:193` | Mismo patrón, agravado por `MinLotManual` como suelo adicional |
-| BR-07 | `Experts/SMC_GOLD/PRUEBAS_SMC_BOS_CHoCH_2TP.mq5:146` | Mismo patrón |
-| BR-08 | `Experts/BOTS_ORO/GOLD_MASTER_EA.mq5:368` | Mismo patrón |
-| BR-09 | `Experts/CRIPTOS/eterium.mq5:689` | Mismo patrón (atenuado por tope de 1 posición y límite diario) |
-| BR-10 | `Experts/BOTS_ORO/ORO_MASTER_v1_LoteMin.mq5:686` | Siempre lote mínimo: el riesgo por operación deja de estar controlado |
-| BR-11 | `Experts/BOTS_ORO/ORO_MASTER_v1_SiempreOpera.mq5:690` | Siempre lote mínimo **y sin comprobación de margen**: "intenta abrir pase lo que pase" |
-| BR-12 | `Experts/SMC_GOLD/EXPER_ORO2_SMC_COMPLETO_RSI_FVG.mq5:686` | Casi idéntico a BR-10 (2 líneas de diferencia) y **con el mismo magic** `20260905` |
+| BR-05 ✅ | `Experts/SCALPER_M1_M5/GRIDOP_ScalperPro_BOS_RSI7_Sesiones.mq5:550` | Suelo de lote mínimo **sin tope de riesgo**: `MathMax(lotsCalc, minLot)` |
+| BR-06 ✅ | `Experts/SCALPER_M1_M5/XAU_M1_SCALPER_EMA_ADX_RSI.mq5:193` | Mismo patrón, agravado por `MinLotManual` como suelo adicional |
+| BR-07 ✅ | `Experts/SMC_GOLD/PRUEBAS_SMC_BOS_CHoCH_2TP.mq5:146` | Mismo patrón |
+| BR-08 ✅ | `Experts/BOTS_ORO/GOLD_MASTER_EA.mq5:368` | Mismo patrón |
+| BR-09 ✅ | `Experts/CRIPTOS/eterium.mq5:689` | Mismo patrón (atenuado por tope de 1 posición y límite diario) |
+| BR-10 ✅ | `Experts/BOTS_ORO/ORO_MASTER_v1_LoteMin.mq5:686` | Siempre lote mínimo: el riesgo por operación deja de estar controlado |
+| BR-11 ✅ | `Experts/BOTS_ORO/ORO_MASTER_v1_SiempreOpera.mq5:690` | Siempre lote mínimo **y sin comprobación de margen**: "intenta abrir pase lo que pase" |
+| BR-12 ✅ | `Experts/SMC_GOLD/EXPER_ORO2_SMC_COMPLETO_RSI_FVG.mq5:686` | Casi idéntico a BR-10 (2 líneas de diferencia) y **con el mismo magic** `20260905` |
+
+> ### ✅ BR-05 … BR-12 corregidas
+>
+> Las ocho se arreglaron con una guarda compartida,
+> [`Include/GoldMaster/GoldMaster_LotGuard.mqh`](../../../Include/GoldMaster/GoldMaster_LotGuard.mqh),
+> en vez de con ocho parches distintos. La guarda calcula lo que de verdad
+> arriesga el lote mínimo y **devuelve 0 (no operar)** si se pasa de los
+> límites, porque por debajo del mínimo del bróker no hay nada que recortar:
+> la única alternativa honesta a no operar es operar con más riesgo del
+> planeado.
+>
+> Cada EA expone dos entradas nuevas: `InpLG_MaxRiskPct` (techo por operación,
+> 5 % de equity por omisión) e `InpLG_MaxOverTarget` (múltiplo máximo del
+> riesgo objetivo, 2× por omisión).
+>
+> Comportamiento validado por simulación de la lógica (oro estándar, stop 4,0):
+>
+> | Equity | Resultado |
+> |---|---|
+> | 10 $ | **bloquea** — el mínimo arriesga 40 % |
+> | 47,85 $ | **bloquea** — 8,4 % > techo del 5 % |
+> | 47,85 $ con stop 1,5 | permite 0,01 (riesgo 1,50 $) |
+> | 200 $ | permite 0,03 (riesgo 12,00 $) |
+> | 10 $ en **cuenta cent** | permite 0,10 (riesgo 0,40 $) |
+>
+> Dos agujeros adicionales encontrados al aplicarla, ya cerrados:
+> `XAU_M1_SCALPER` devolvía un lote **operable** en tres rutas de fallo de
+> datos (ahora bloquea) y su `MinLotManual` configurable podía subir el lote
+> por encima de lo aprobado (ahora se le pasa a la guarda); `PRUEBAS_SMC`
+> operaba **sin comprobar el lote** en su sitio de llamada.
+>
+> **Pendiente de tu parte:** compilar en MetaEditor. En este entorno Linux no
+> hay compilador MQL5, así que la sintaxis no está verificada por el compilador.
+
 | BR-13 | `Experts/SMC_GOLD/ORO4_SMC_v3_Compacto.mq5:19`, `:141`, `:172` | Hasta 5 entradas, cada una al 2 % completo → ~10 % de riesgo agregado sin tope de grupo ni límite diario |
 | BR-14 | `Experts/SMC_GOLD/SCALPER_SMC_EMA_ATR_5pos.mq5:15`, `:19` | Hasta 5 posiciones al 2 % cada una, sin tope agregado ni límite diario |
 | BR-15 | `Experts/GRID_PENDIENTES/TALOS_EMA5_13_ATR_Trailing_v10.mq5:10`, `:150`, `:157` | Apila hasta 4 posiciones del mismo lado, una por vela, con lote fijo y sin tope de riesgo |

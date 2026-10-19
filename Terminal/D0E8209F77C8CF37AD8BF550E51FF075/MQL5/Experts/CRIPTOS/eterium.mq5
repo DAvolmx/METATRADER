@@ -7,6 +7,15 @@
 #property version   "1.00"
 
 #include <Trade/Trade.mqh>
+#include <GoldMaster\GoldMaster_LotGuard.mqh>
+
+//--- Guarda de lote (GoldMaster_LotGuard.mqh) -----------------------
+// El suelo de lote minimo del broker puede forzar MUCHO mas riesgo del
+// planeado sin avisar. Estos dos limites hacen que el EA prefiera NO
+// operar antes que operar con un riesgo que no eligio el usuario.
+input double InpLG_MaxRiskPct    = 5.0;  // Guarda: riesgo max. por operacion (% equity, 0=off)
+input double InpLG_MaxOverTarget = 2.0;  // Guarda: multiplo max. del riesgo objetivo (0=off)
+
 
 CTrade trade;
 
@@ -682,11 +691,15 @@ double CalculateVolume(
          SYMBOL_VOLUME_STEP
       );
 
-   volume =
-      MathFloor(volume/step)*step;
-
-   volume =
-      MathMax(volume,minLot);
+   // La guarda sustituye al MathMax(volume,minLot) que subia el lote (y el
+   // riesgo real) en silencio. Devuelve 0 si el minimo no cabe.
+   // SYMBOL, no _Symbol: este EA opera el simbolo de InpSymbol, que puede no
+   // ser el del grafico. Con _Symbol se dimensionaria sobre otro instrumento.
+   volume = GMLotGuard(slDistance, riskMoney,
+                       InpLG_MaxRiskPct, InpLG_MaxOverTarget, "ETERIUM",
+                       false, SYMBOL);
+   if(volume <= 0.0)
+      return 0.0;
 
    volume =
       MathMin(volume,maxLot);

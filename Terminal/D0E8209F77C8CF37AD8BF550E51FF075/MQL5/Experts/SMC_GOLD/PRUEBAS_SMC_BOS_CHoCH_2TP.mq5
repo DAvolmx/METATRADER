@@ -15,6 +15,15 @@
 #property strict
 
 #include <Trade\Trade.mqh>
+#include <GoldMaster\GoldMaster_LotGuard.mqh>
+
+//--- Guarda de lote (GoldMaster_LotGuard.mqh) -----------------------
+// El suelo de lote minimo del broker puede forzar MUCHO mas riesgo del
+// planeado sin avisar. Estos dos limites hacen que el EA prefiera NO
+// operar antes que operar con un riesgo que no eligio el usuario.
+input double InpLG_MaxRiskPct    = 5.0;  // Guarda: riesgo max. por operacion (% equity, 0=off)
+input double InpLG_MaxOverTarget = 2.0;  // Guarda: multiplo max. del riesgo objetivo (0=off)
+
 CTrade trade;
 
 //--- Parámetros de entrada
@@ -131,20 +140,13 @@ double CalcLotSize(double slDistancePoints)
    double balance   = AccountInfoDouble(ACCOUNT_BALANCE);
    double riskMoney = balance * (RiskPercent / 100.0);
 
-   double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
-   double tickSize  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    double point     = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
 
-   double valuePerPoint = (tickValue / tickSize) * point;
-   double lot = riskMoney / (slDistancePoints * valuePerPoint);
-
-   double minLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-   double maxLot  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-   double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-
-   lot = MathFloor(lot / lotStep) * lotStep;
-   lot = MathMax(minLot, MathMin(maxLot, lot));
-   return lot;
+   // OJO: esta funcion recibe la distancia en PUNTOS; la guarda la quiere
+   // en PRECIO, asi que se convierte aqui.
+   double slPrice = slDistancePoints * point;
+   return GMLotGuard(slPrice, riskMoney,
+                     InpLG_MaxRiskPct, InpLG_MaxOverTarget, "PRUEBAS_SMC", false);
   }
 
 //+------------------------------------------------------------------+
@@ -154,6 +156,9 @@ void OpenTrade(bool isShort, double entry, double sl, double tp1, double tp2)
   {
    double slDistPoints = MathAbs(entry - sl) / SymbolInfoDouble(_Symbol, SYMBOL_POINT);
    double lot = CalcLotSize(slDistPoints);
+   // Este sitio de llamada NO comprobaba el lote y pasaba directo a operar:
+   // con la guarda activa, 0 significa "no operar".
+   if(lot <= 0.0) return;
 
    bool ok;
    if(isShort)

@@ -12,6 +12,15 @@
 
 #include <Trade\Trade.mqh>
 #include <Trade\PositionInfo.mqh>
+#include <GoldMaster\GoldMaster_LotGuard.mqh>
+
+//--- Guarda de lote (GoldMaster_LotGuard.mqh) -----------------------
+// El suelo de lote minimo del broker puede forzar MUCHO mas riesgo del
+// planeado sin avisar. Estos dos limites hacen que el EA prefiera NO
+// operar antes que operar con un riesgo que no eligio el usuario.
+input double InpLG_MaxRiskPct    = 5.0;  // Guarda: riesgo max. por operacion (% equity, 0=off)
+input double InpLG_MaxOverTarget = 2.0;  // Guarda: multiplo max. del riesgo objetivo (0=off)
+
 CTrade         trade;
 CPositionInfo  posInfo;
 
@@ -360,19 +369,27 @@ double CalcularLote(double sl_dist, double risk_factor = 1.0)
    double tick_val  = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
    double tick_size = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
    if(tick_size == 0) return SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-   double lot_raw   = risk_money / (sl_dist / tick_size * tick_val);
    double lot_min   = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-   double lot_max   = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-   double lot_step  = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-   double lot       = MathFloor(lot_raw / lot_step) * lot_step;
-   lot = MathMax(lot_min, MathMin(lot_max, lot));
+   double lot       = GMLotGuard(sl_dist, risk_money,
+                                 InpLG_MaxRiskPct, InpLG_MaxOverTarget,
+                                 "GOLD_MASTER_EA", false);
+   if(lot <= 0.0) return 0.0;
    // Verificar margen
    double margin_req = 0;
    if(OrderCalcMargin(ORDER_TYPE_BUY, _Symbol, lot,
                       SymbolInfoDouble(_Symbol, SYMBOL_ASK), margin_req))
      {
       double free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
-      if(margin_req > free_margin * 0.8) lot = lot_min;
+      // Si no hay margen ni para el lote calculado, antes se bajaba al minimo
+      // en silencio, que es justo lo que la guarda quiere evitar. Si el minimo
+      // ya paso la guarda arriba, es aceptable; si no, no se opera.
+      if(margin_req > free_margin * 0.8)
+        {
+         if(GMLotGuard(sl_dist, risk_money, InpLG_MaxRiskPct,
+                       InpLG_MaxOverTarget, "GOLD_MASTER_EA/margen", true) <= 0.0)
+            return 0.0;
+         lot = lot_min;
+        }
      }
    return lot;
   }

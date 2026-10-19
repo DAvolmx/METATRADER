@@ -45,6 +45,15 @@
 #property description "sizing por riesgo con tope de margen (OrderCalcMargin). Consolida ORO3 + unnn."
 
 #include <Trade\Trade.mqh>
+#include <GoldMaster\GoldMaster_LotGuard.mqh>
+
+//--- Guarda de lote (GoldMaster_LotGuard.mqh) -----------------------
+// El suelo de lote minimo del broker puede forzar MUCHO mas riesgo del
+// planeado sin avisar. Estos dos limites hacen que el EA prefiera NO
+// operar antes que operar con un riesgo que no eligio el usuario.
+input double InpLG_MaxRiskPct    = 5.0;  // Guarda: riesgo max. por operacion (% equity, 0=off)
+input double InpLG_MaxOverTarget = 2.0;  // Guarda: multiplo max. del riesgo objetivo (0=off)
+
 CTrade trade;
 
 //+------------------------------------------------------------------------+
@@ -687,7 +696,13 @@ void AbrirOperacion(ENUM_ORDER_TYPE tipo, double atr, double ask, double bid, do
    // *** LOTE FIJO MINIMO + SIN FILTRO DE MARGEN ***
    // Cada senal INTENTA abrir con el lote minimo, sin auto-cancelarse por capital.
    // (Si el broker no tiene margen, rechazara con 10019; eso se registra abajo.)
-   double lotes = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   // Esta variante opera SIEMPRE al volumen minimo a proposito. Eso no exime
+   // de comprobar CUANTO arriesga ese minimo: con cuentas pequenas puede ser
+   // una fraccion enorme del capital. La guarda devuelve 0 si se pasa del
+   // techo, y entonces no se opera.
+   double lotes = GMLotGuard(slDist, 0.0, InpLG_MaxRiskPct, 0.0,
+                             "ORO_LOTE_MIN", !InpPrintDebug);
+   if(lotes <= 0.0) return;
 
    bool ok = esCompra ? trade.Buy(lotes, _Symbol, ask, sl, tp, "ORO_MASTER_ALWAYS")
                        : trade.Sell(lotes, _Symbol, bid, sl, tp, "ORO_MASTER_ALWAYS");
