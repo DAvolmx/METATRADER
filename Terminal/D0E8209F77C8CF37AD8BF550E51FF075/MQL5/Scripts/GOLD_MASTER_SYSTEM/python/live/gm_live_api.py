@@ -200,14 +200,52 @@ def news():
     return {"source": "bridge", "events": rows}
 
 
+#: horas a partir de las cuales un pronóstico cacheado se considera caducado.
+#: Son velas H4: pasadas unas pocas, el pronóstico ya no habla del mercado
+#: que tienes delante.
+FORECAST_STALE_H = 12.0
+
+
 @app.get("/api/forecast")
 def forecast():
-    """Pronóstico de 2 velas H4 (report cacheado por gm_forecast)."""
+    """Pronóstico de 2 velas H4, con CONTROL DE CADUCIDAD.
+
+    El control no es decorativo. El fichero cacheado puede ser de hace años
+    (medido: un forecast.json de 2022-03 con base_close 1969.74 mientras el oro
+    cotizaba a 3364). El panel lo pintaba como si fuera de hoy, que es
+    exactamente el tipo de dato rancio con el que se toman malas decisiones.
+    Ahora se devuelve la antigüedad y una marca `stale`, y quien lo consuma
+    tiene que decidir qué hace con ella.
+    """
     here = Path(__file__).resolve().parent
-    for p in (here.parent / "offline" / "out_offline" / "forecast.json",):
-        if p.exists():
-            return {"source": "cache", **_read_json(p)}
-    return {"source": "offline", "message": "Ejecuta: python gm_forecast.py <datos> para generar el pronóstico."}
+    p = here.parent / "offline" / "out_offline" / "forecast.json"
+    if not p.exists():
+        return {"source": "offline",
+                "message": "Ejecuta: python gm_forecast.py <datos> para generar el pronóstico."}
+    data = _read_json(p)
+    out = {"source": "cache", **data}
+    lt = data.get("last_time")
+    age_h = None
+    if lt:
+        try:
+            from datetime import datetime, timezone
+            t = datetime.fromisoformat(str(lt).replace("Z", "")).replace(tzinfo=timezone.utc)
+            age_h = (datetime.now(timezone.utc) - t).total_seconds() / 3600.0
+        except Exception:
+            age_h = None
+    if age_h is None:                       # sin marca de tiempo, usa el fichero
+        try:
+            age_h = (time.time() - p.stat().st_mtime) / 3600.0
+        except Exception:
+            age_h = None
+    out["age_hours"] = None if age_h is None else round(age_h, 1)
+    out["stale"] = bool(age_h is not None and age_h > FORECAST_STALE_H)
+    if out["stale"]:
+        dias = age_h / 24.0
+        out["stale_message"] = (
+            f"Pronóstico caducado: {dias:.0f} días de antigüedad "
+            f"(última vela {lt}). Regenera con gm_forecast.py antes de usarlo.")
+    return out
 
 
 _SENT_CACHE: dict = {"ts": 0, "data": None}

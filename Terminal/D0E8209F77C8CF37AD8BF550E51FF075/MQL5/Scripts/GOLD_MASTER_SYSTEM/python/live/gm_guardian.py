@@ -55,6 +55,10 @@ class GuardianConfig:
     symbol: str = "XAUUSDmicro"
     stages: list = field(default_factory=lambda: list(DEFAULT_STAGES))
     max_risk_frac: float = 0.5          # si ni el lote mínimo cabe bajo esto -> bloquea
+    #: múltiplo máximo del objetivo de etapa que se tolera cuando el lote
+    #: mínimo impide bajar más. Por encima de esto se bloquea en vez de dejar
+    #: que la cuenta opere al triple del riesgo planeado sin enterarse.
+    over_target_max: float = 2.0
     news_blackout_min: int = 30         # no operar a < X min de noticia de alto impacto
     max_spread_points: float = 60.0     # spread máximo (en puntos de 0.01)
     block_regimes: tuple = ("agitado",) # regímenes donde no se opera (perdía -0.17R)
@@ -88,7 +92,8 @@ class RiskGovernor:
         f = p / "guardian.txt"
         f.write_text(f"news_blackout_min={self.cfg.news_blackout_min}\n"
                      f"max_spread_points={self.cfg.max_spread_points}\n"
-                     f"max_risk_frac={self.cfg.max_risk_frac}\n", encoding="utf-8")
+                     f"max_risk_frac={self.cfg.max_risk_frac}\n"
+                     f"over_target_max={self.cfg.over_target_max}\n", encoding="utf-8")
         return str(f)
 
     def pretrade_score(self, ctx: dict) -> tuple[int, list[str]]:
@@ -152,9 +157,34 @@ class RiskGovernor:
         # recorta si por redondeo se pasa del objetivo
         while risk_usd > self.cfg.max_risk_frac * equity and lot > min_lot:
             lot = round((lot - min_lot) / min_lot) * min_lot; risk_usd = lot * stop_distance * ppl
+
+        # --- el riesgo real puede superar al de la etapa, y hay que DECIRLO ---
+        # Cuando el lote mínimo no permite bajar hasta el objetivo de la etapa,
+        # la operación pasa igualmente mientras quepa bajo max_risk_frac. Eso
+        # deja un hueco peligroso: una etapa que declara 3.5% puede acabar
+        # arriesgando 8.4% y el panel lo mostraba como "PERMITIDO" sin más.
+        # Ahora se calcula el exceso, se avisa, y si supera `over_target_max`
+        # veces el objetivo se BLOQUEA: para una cuenta pequeña, arriesgar el
+        # triple de lo planeado en cada operación es la via rapida a la ruina.
+        risk_pct = risk_usd / equity * 100.0
+        over = risk_pct / stage.risk_pct if stage.risk_pct > 0 else 1.0
+        forced = risk_usd > want_risk * 1.05        # el lote mínimo manda
+        if forced and over > self.cfg.over_target_max:
+            return block(
+                f"el lote mínimo fuerza {risk_pct:.1f}% de riesgo, "
+                f"{over:.1f}x el {stage.risk_pct:.1f}% de la etapa '{stage.name}' "
+                f"(máximo {self.cfg.over_target_max:.1f}x). "
+                f"Usa cuenta cent, un stop más ajustado, o capitaliza más.")
+        if forced:
+            warns.append(
+                f"riesgo {risk_pct:.1f}% = {over:.1f}x el objetivo de etapa "
+                f"({stage.risk_pct:.1f}%): lo impone el lote mínimo, no la señal")
         return dict(allow=True, reason="ok", stage=stage.name, score=score, warnings=warns,
                     lot=round(lot, 2), risk_usd=round(risk_usd, 2),
-                    risk_pct=round(risk_usd / equity * 100, 2),
+                    risk_pct=round(risk_pct, 2),
+                    stage_target_pct=stage.risk_pct,
+                    risk_over_target=bool(forced),
+                    over_target_x=round(over, 2),
                     day_trades=self.day_trades, day_pnl=round(self.day_pnl, 2))
 
 
