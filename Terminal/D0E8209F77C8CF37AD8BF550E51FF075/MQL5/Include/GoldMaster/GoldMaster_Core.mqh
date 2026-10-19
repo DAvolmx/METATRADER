@@ -144,12 +144,34 @@ private:
    void LoadCSV() {
       m_count = 0;
       ArrayResize(m_events, 0);
-      int fh = FileOpen(m_csv_path, FILE_READ|FILE_CSV|FILE_ANSI, ',');
+      // Se intenta PRIMERO el sandbox COMUN y despues el del terminal.
+      //
+      // Por que: gm_intel.py escribe el calendario en
+      //   %APPDATA%\MetaQuotes\Terminal\Common\Files\GoldMaster\news_calendar.csv
+      // es decir, en el sandbox COMUN. Este FileOpen se hacia SIN FILE_COMMON,
+      // asi que resolvia contra MQL5\Files del terminal y NUNCA encontraba el
+      // fichero. Resultado: el filtro de noticias no bloqueaba jamas, y lo
+      // hacia en silencio (el aviso sale una sola vez y encima dice que "en
+      // backtest es normal"), de modo que cualquier EA que lo use creia tener
+      // proteccion ante noticias sin tenerla. Probar las dos ubicaciones
+      // ademas evita romper a quien haya dejado el CSV a mano en el terminal.
+      int fh = FileOpen(m_csv_path, FILE_READ|FILE_CSV|FILE_ANSI|FILE_COMMON|FILE_SHARE_READ, ',');
+      bool from_common = (fh != INVALID_HANDLE);
+      if(!from_common)
+         fh = FileOpen(m_csv_path, FILE_READ|FILE_CSV|FILE_ANSI|FILE_SHARE_READ, ',');
       if(fh == INVALID_HANDLE) {
          static bool s_warned=false;
-         if(!s_warned) { s_warned=true; GM_Log("NewsFilter","CSV no encontrado: "+m_csv_path+" (filtro de noticias desactivado; en backtest es normal)",true); }
+         if(!s_warned) {
+            s_warned=true;
+            GM_Log("NewsFilter","CSV NO encontrado ni en Common\\Files\\"+m_csv_path+
+                   " ni en el sandbox del terminal. EL FILTRO DE NOTICIAS NO VA A "
+                   "BLOQUEAR NADA. Genera el calendario con gm_intel.py antes de "
+                   "operar en real; en backtest sin calendario es esperable.",true);
+         }
          return;
       }
+      GM_Log("NewsFilter", StringFormat("calendario cargado desde %s",
+             from_common ? "Common\\Files" : "sandbox del terminal"), false);
       int rows = 0;
       while(!FileIsEnding(fh) && rows < 500) {
          string date_s  = FileReadString(fh);
