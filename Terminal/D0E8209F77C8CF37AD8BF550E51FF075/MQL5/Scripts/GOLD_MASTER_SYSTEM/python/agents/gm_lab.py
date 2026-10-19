@@ -35,6 +35,7 @@ def main() -> int:
     ap.add_argument("--gold", type=Path, help="CSV de velas de oro")
     ap.add_argument("--dxy", type=Path, help="CSV diario del DXY")
     ap.add_argument("--params", type=Path, help="params_xauusd_h1.json")
+    ap.add_argument("--cot", type=Path, help="CSV de posicionamiento COT (CFTC)")
     ap.add_argument("--out", type=Path, help="carpeta de salida de artefactos")
     ap.add_argument("--agentes", type=str, default="",
                     help=f"lista separada por comas; por omision: {','.join(ORDEN)}")
@@ -55,7 +56,8 @@ def main() -> int:
         return 0
 
     ctx = AgentContext(vault=v, data_gold=a.gold, data_dxy=a.dxy,
-                       params=a.params, out_dir=a.out)
+                       params=a.params, out_dir=a.out,
+                       extra={"cot": a.cot} if a.cot else {})
     names = [x.strip() for x in a.agentes.split(",") if x.strip()] or None
     res = run_cycle(ctx, names)
     print(json.dumps(res, indent=2, ensure_ascii=False, default=str))

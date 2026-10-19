@@ -22,6 +22,7 @@ AGENTES
   regimen        dice en qué régimen está el mercado HOY y qué implica
   order-blocks   reejecuta taxonomía y barrido, y los juzga con el umbral vivo
   dxy            reejecuta la estabilidad interanual del efecto dólar
+  sentimiento    publica el estado y REVALIDA si anticipa algo
   diario         aprende de TUS operaciones registradas
   critico        lee las notas recientes y escribe las contradicciones abiertas
 
@@ -334,6 +335,75 @@ class DxyAgent(Agent):
                 "sharpe_neto": est["sharpe_neto_anualizado"]}
 
 
+# ───────────────────────── sentimiento ─────────────────────────
+
+
+class SentimentAgent(Agent):
+    """Publica el estado de sentimiento y REVALIDA su capacidad predictiva.
+
+    No se limita a publicar el número: vuelve a medir si el índice anticipa al
+    oro. Un indicador de sentimiento que se publica sin revalidar es la receta
+    para que, dentro de un año, alguien lo opere creyendo que predice.
+    """
+
+    name = "sentimiento"
+
+    def run(self, ctx: AgentContext) -> dict:
+        import gm_data
+        import gm_sentiment as snt
+
+        if not ctx.data_gold or not Path(ctx.data_gold).exists():
+            return {"agente": self.name, "error": "sin datos de oro"}
+        gold = gm_data.load(ctx.data_gold)
+        dxy = (gm_data.load(ctx.data_dxy)
+               if ctx.data_dxy and Path(ctx.data_dxy).exists() else None)
+        cot_path = ctx.extra.get("cot")
+        cot = (snt.load_cot(cot_path)
+               if cot_path and Path(cot_path).exists() else None)
+
+        ints = snt.internals(gold)
+        data, faltan = snt.attach_external(ints, cot, dxy)
+        zs = snt.composite(data)
+        val = float(zs["compuesto"].iloc[-1])
+        v = snt.validate(zs, gm_data.resample(gold, "1D"))
+
+        mejor = max((x["sigmas_sobre_azar"] for k, x in v.items()
+                     if isinstance(x, dict)), default=0.0)
+        filas = "\n".join(
+            f"- {k}: acierto {x['acierto_pct']:.2f}% ({x['sigmas_sobre_azar']:+.2f} sigma), "
+            f"corr train {x['corr_train']:+.4f} -> test {x['corr_test']:+.4f}"
+            for k, x in v.items() if isinstance(x, dict))
+        comps = {n: round(float(zs[f"z_{n}"].iloc[-1]), 2)
+                 for n in snt.SIGNOS if f"z_{n}" in zs.columns
+                 and np.isfinite(zs[f"z_{n}"].iloc[-1])}
+        volteo = any(isinstance(x, dict) and x["corr_train"] * x["corr_test"] < 0
+                     for x in v.values())
+
+        cuerpo = (
+            f"## Estado: **{val:+.1f}** — {snt.etiqueta(val)}\n\n"
+            f"- Componentes usados: {zs.attrs.get('componentes_usados')}\n"
+            f"- Fuentes ausentes: {faltan or 'ninguna'}\n"
+            f"- Lectura por componente (z): {comps}\n\n"
+            f"## Revalidación de su capacidad predictiva\n\n{filas}\n\n"
+            f"{v['veredicto']}\n\n"
+            + ("Un cambio de SIGNO en la correlación entre entrenamiento y "
+               "prueba indica que no hay relación estable, no que haga falta "
+               "más ajuste.\n" if volteo else ""))
+
+        ctx.vault.log_experiment(
+            agente=self.name,
+            hipotesis="el indice de sentimiento anticipa al oro",
+            metrica="sigmas_sobre_azar", valor=float(mejor),
+            veredicto=("candidata" if mejor > 2.0 else "refutada"),
+            n_pruebas=len([x for x in v.values() if isinstance(x, dict)]),
+            cuerpo=cuerpo, tags=["sentimiento", "contexto"], enlaces=["INDICE"],
+            datos=str(ctx.data_gold))
+        return {"agente": self.name, "compuesto": round(val, 1),
+                "etiqueta": snt.etiqueta(val), "fuentes_ausentes": faltan,
+                "max_sigma": round(float(mejor), 2)}
+
+
+
 # ───────────────────────────── diario ─────────────────────────────
 
 
@@ -466,12 +536,14 @@ REGISTRY: dict[str, type[Agent]] = {
     RegimeAgent.name: RegimeAgent,
     OrderBlockAgent.name: OrderBlockAgent,
     DxyAgent.name: DxyAgent,
+    SentimentAgent.name: SentimentAgent,
     JournalAgent.name: JournalAgent,
     CriticAgent.name: CriticAgent,
 }
 
 #: el crítico va último a propósito: necesita leer lo que han escrito los demás
-ORDEN = ["calibracion", "regimen", "order-blocks", "dxy", "diario", "critico"]
+ORDEN = ["calibracion", "regimen", "order-blocks", "dxy", "sentimiento",
+         "diario", "critico"]
 
 
 def run_cycle(ctx: AgentContext, agents: list[str] | None = None) -> dict:
@@ -493,4 +565,4 @@ def run_cycle(ctx: AgentContext, agents: list[str] | None = None) -> dict:
 
 __all__ = ["Agent", "AgentContext", "REGISTRY", "ORDEN", "run_cycle",
            "CalibrationAgent", "RegimeAgent", "OrderBlockAgent", "DxyAgent",
-           "JournalAgent", "CriticAgent"]
+           "SentimentAgent", "JournalAgent", "CriticAgent"]
