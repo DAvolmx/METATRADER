@@ -1,0 +1,12 @@
+{
+  "n_specs_tested": 300,
+  "n_obs": 569,
+  "best_spec": "eq\u00b7eq\u00b7tp3R\u00b7breaker\u00b7ext",
+  "best_expectancy_R": 0.3793,
+  "best_n": 58,
+  "observed_stat": 2.8887,
+  "null_stat_p50": 3.8248,
+  "null_stat_p95": 5.7515,
+  "p_value": 0.8474,
+  "verdict": "NO sobrevive: explicable por haber probado muchas variantes"
+}

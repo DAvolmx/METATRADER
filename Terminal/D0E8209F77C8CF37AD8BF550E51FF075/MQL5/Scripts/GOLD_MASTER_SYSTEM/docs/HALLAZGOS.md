@@ -69,15 +69,42 @@ intrabarra 2,191 frente a 2,200 real, volatilidad 17,4 % frente a 17,99 %,
 | Resultado | Valor |
 |---|---|
 | Order blocks detectados en datos **sintéticos** | ~1.410 por camino (vs 1.022 reales) |
-| Mejor esperanza sintética, mediana | **+0,592 R** |
-| Mejor esperanza sintética, percentil 90 | +0,881 R |
+| Mejor esperanza sintética, mediana | **+0,600 R** |
+| Mejor esperanza sintética, percentil 90 | +0,852 R |
+| Mejor esperanza sintética, máximo | +1,286 R |
 | Mejor esperanza **real** | +0,379 R |
-| Caminos sintéticos que **superan** el mejor real | **91,7 %** |
+| Caminos sintéticos que **superan** el mejor real | **96,4 %** |
+| **p-valor del test nulo** | **0,964** |
 
 Léelo despacio: sobre datos donde por construcción no hay dinero institucional,
 el detector encuentra **más** order blocks que en el oro real, y el barrido saca
 **mejor** resultado nueve de cada diez veces. Lo que mide el detector es cosecha
 de volatilidad.
+
+**Campaña completa**: 84 caminos nulos (la campaña se detuvo en 84 de 140 por un
+reinicio del contenedor; el p-valor se mantuvo estable desde el camino 12 —
+91,7 %, 96,5 %, 95,7 %, 96,4 %— así que más caminos no cambian la conclusión).
+Artefactos reproducibles en `python/smc/out_campaign/`.
+
+### Y tampoco se puede saber de antemano cuál funcionará
+
+Última defensa posible: aunque la media no tenga ventaja, ¿se puede aprender a
+distinguir los order blocks buenos de los malos? Se entrenó un clasificador
+sobre las 15 características del bloque y su contexto (fuerza del
+desplazamiento, barrido previo, FVG, posición en el rango, sesión, volumen,
+escenario), con validación walk-forward **purgada** (hueco de 24 barras entre
+entrenamiento y validación para que no haya solape).
+
+| Pliegue | 1 | 2 | 3 | 4 | Medio |
+|---|---|---|---|---|---|
+| AUC | 0,300 | 0,383 | 0,534 | 0,487 | **0,426** |
+
+AUC medio **0,426**, por debajo del azar. Sobre 569 operaciones con una tasa
+base de acierto del 35,3 %. Un AUC sistemáticamente inferior a 0,5 fuera de
+muestra es la firma del sobreajuste: el modelo aprende patrones del tramo de
+entrenamiento que se invierten en el de validación.
+
+No hay forma de saber de antemano qué order block va a funcionar.
 
 > Durante el desarrollo del generador apareció un sesgo propio que invalidaba
 > esta comparación: el puente browniano escalaba la mecha con el cuerpo de la

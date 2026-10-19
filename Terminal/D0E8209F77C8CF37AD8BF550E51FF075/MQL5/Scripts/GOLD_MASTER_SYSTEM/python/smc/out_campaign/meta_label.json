@@ -1,0 +1,31 @@
+{
+  "n_trades": 569,
+  "base_win_rate_pct": 35.33,
+  "folds_validos": 4,
+  "auc_por_fold": [
+    0.2995,
+    0.3829,
+    0.5339,
+    0.4867
+  ],
+  "auc_medio": 0.4258,
+  "acierto_medio_pct": 56.14,
+  "features": [
+    "disp_atr",
+    "disp_range_atr",
+    "ob_range_atr",
+    "wick_body_ratio",
+    "range_pos",
+    "vol_ratio",
+    "hour",
+    "bos_confirmed",
+    "sweep_before",
+    "fvg_paired",
+    "rejection",
+    "is_extreme",
+    "vol_spike",
+    "propulsion",
+    "breaker"
+  ],
+  "verdict": "el contexto del bloque NO discrimina: AUC indistinguible de 0.5, o sea no se puede saber de antemano que order block funcionara"
+}

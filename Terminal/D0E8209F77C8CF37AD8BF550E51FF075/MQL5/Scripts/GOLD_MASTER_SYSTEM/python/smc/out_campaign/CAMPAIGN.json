@@ -1,0 +1,108 @@
+{
+  "datos": "122,028 barras  2004-06-11 → 2025-06-06  (21.0 años)  precio 381.80–3494.25",
+  "corte": "2019-03-26 10:00:00",
+  "n_ob_train": 1022,
+  "n_especificaciones": 486,
+  "bootstrap": {
+    "best_spec": "eq·eq·tp3R·breaker·ext",
+    "train_expectancy_R": 0.3793,
+    "bootstrap": {
+      "riesgo_1pct": {
+        "n_trades_src": 58,
+        "horizon": 58,
+        "n_boot": 20000,
+        "risk_frac": 0.01,
+        "p_ruin_pct": 0.0,
+        "p_profit_pct": 96.01,
+        "final_p05": 1.002,
+        "final_p50": 1.221,
+        "final_p95": 1.489,
+        "max_dd_p50_pct": -7.78,
+        "max_dd_p05_pct": -14.1,
+        "expectancy_R": 0.3793
+      },
+      "riesgo_2pct": {
+        "n_trades_src": 58,
+        "horizon": 58,
+        "n_boot": 20000,
+        "risk_frac": 0.02,
+        "p_ruin_pct": 0.0,
+        "p_profit_pct": 92.36,
+        "final_p05": 0.988,
+        "final_p50": 1.462,
+        "final_p95": 2.164,
+        "max_dd_p50_pct": -15.12,
+        "max_dd_p05_pct": -26.49,
+        "expectancy_R": 0.3793
+      },
+      "riesgo_5pct": {
+        "n_trades_src": 58,
+        "horizon": 58,
+        "n_boot": 20000,
+        "risk_frac": 0.05,
+        "p_ruin_pct": 2.74,
+        "p_profit_pct": 92.36,
+        "final_p05": 0.864,
+        "final_p50": 2.245,
+        "final_p95": 5.837,
+        "max_dd_p50_pct": -34.59,
+        "max_dd_p05_pct": -55.59,
+        "expectancy_R": 0.3793
+      }
+    }
+  },
+  "reality_check": {
+    "n_specs_tested": 300,
+    "n_obs": 569,
+    "best_spec": "eq·eq·tp3R·breaker·ext",
+    "best_expectancy_R": 0.3793,
+    "best_n": 58,
+    "observed_stat": 2.8887,
+    "null_stat_p50": 3.8248,
+    "null_stat_p95": 5.7515,
+    "p_value": 0.8474,
+    "verdict": "NO sobrevive: explicable por haber probado muchas variantes"
+  },
+  "null_paths_completados": 84,
+  "null_verdict": {
+    "real_best_exp_R": 0.3793,
+    "null_n_paths": 84,
+    "null_p50": 0.6,
+    "null_p90": 0.8515,
+    "null_max": 1.2857,
+    "p_value": 0.9643,
+    "verdict": "INDISTINGUIBLE de volatilidad pura: el detector no esta leyendo estructura institucional, esta cosechando volatilidad"
+  },
+  "meta_label": {
+    "n_trades": 569,
+    "base_win_rate_pct": 35.33,
+    "folds_validos": 4,
+    "auc_por_fold": [
+      0.2995,
+      0.3829,
+      0.5339,
+      0.4867
+    ],
+    "auc_medio": 0.4258,
+    "acierto_medio_pct": 56.14,
+    "features": [
+      "disp_atr",
+      "disp_range_atr",
+      "ob_range_atr",
+      "wick_body_ratio",
+      "range_pos",
+      "vol_ratio",
+      "hour",
+      "bos_confirmed",
+      "sweep_before",
+      "fvg_paired",
+      "rejection",
+      "is_extreme",
+      "vol_spike",
+      "propulsion",
+      "breaker"
+    ],
+    "verdict": "el contexto del bloque NO discrimina: AUC indistinguible de 0.5, o sea no se puede saber de antemano que order block funcionara"
+  },
+  "nota": "La campana se detuvo en 84 de 140 caminos por un reinicio del contenedor. El p-valor del test nulo es 0.96 y se mantuvo estable desde el camino 12 (91.7%, 96.5%, 95.7%, 96.4%): mas caminos no cambian la conclusion."
+}

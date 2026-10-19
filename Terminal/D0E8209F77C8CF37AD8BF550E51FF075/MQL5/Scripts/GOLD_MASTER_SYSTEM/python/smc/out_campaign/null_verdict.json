@@ -1,0 +1,9 @@
+{
+  "real_best_exp_R": 0.3793,
+  "null_n_paths": 84,
+  "null_p50": 0.6,
+  "null_p90": 0.8515,
+  "null_max": 1.2857,
+  "p_value": 0.9643,
+  "verdict": "INDISTINGUIBLE de volatilidad pura: el detector no esta leyendo estructura institucional, esta cosechando volatilidad"
+}

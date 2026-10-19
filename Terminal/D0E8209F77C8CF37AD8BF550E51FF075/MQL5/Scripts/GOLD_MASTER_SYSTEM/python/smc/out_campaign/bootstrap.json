@@ -1,0 +1,48 @@
+{
+  "best_spec": "eq\u00b7eq\u00b7tp3R\u00b7breaker\u00b7ext",
+  "train_expectancy_R": 0.3793,
+  "bootstrap": {
+    "riesgo_1pct": {
+      "n_trades_src": 58,
+      "horizon": 58,
+      "n_boot": 20000,
+      "risk_frac": 0.01,
+      "p_ruin_pct": 0.0,
+      "p_profit_pct": 96.01,
+      "final_p05": 1.002,
+      "final_p50": 1.221,
+      "final_p95": 1.489,
+      "max_dd_p50_pct": -7.78,
+      "max_dd_p05_pct": -14.1,
+      "expectancy_R": 0.3793
+    },
+    "riesgo_2pct": {
+      "n_trades_src": 58,
+      "horizon": 58,
+      "n_boot": 20000,
+      "risk_frac": 0.02,
+      "p_ruin_pct": 0.0,
+      "p_profit_pct": 92.36,
+      "final_p05": 0.988,
+      "final_p50": 1.462,
+      "final_p95": 2.164,
+      "max_dd_p50_pct": -15.12,
+      "max_dd_p05_pct": -26.49,
+      "expectancy_R": 0.3793
+    },
+    "riesgo_5pct": {
+      "n_trades_src": 58,
+      "horizon": 58,
+      "n_boot": 20000,
+      "risk_frac": 0.05,
+      "p_ruin_pct": 2.74,
+      "p_profit_pct": 92.36,
+      "final_p05": 0.864,
+      "final_p50": 2.245,
+      "final_p95": 5.837,
+      "max_dd_p50_pct": -34.59,
+      "max_dd_p05_pct": -55.59,
+      "expectancy_R": 0.3793
+    }
+  }
+}
