@@ -27,6 +27,15 @@
   .pill.ok{background:#13322a;color:var(--up)}.pill.block{background:#361e1b;color:var(--down)}
   .note{grid-column:1/-1;color:var(--ink2);font-family:var(--mono);font-size:11px;text-align:center}
   .meter{height:8px;border-radius:5px;background:#222a3a;overflow:hidden;margin-top:5px}.meter i{display:block;height:100%}
+  .gauge{position:relative;height:10px;border-radius:5px;margin:8px 0 4px;
+    background:linear-gradient(90deg,var(--down) 0%,#3a3f4b 50%,var(--up) 100%)}
+  .gauge b{position:absolute;top:-3px;width:3px;height:16px;border-radius:2px;background:var(--ink);
+    box-shadow:0 0 0 2px var(--panel)}
+  .gauge s{position:absolute;top:-2px;left:50%;width:1px;height:14px;background:var(--ink2);opacity:.6}
+  .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+  .chip{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:4px;background:#222a3a;color:var(--ink2)}
+  .chip b{color:var(--ink);font-weight:600}
+  .warn{color:var(--ink2);font-size:10px;line-height:1.4;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
 </style>
 </head>
 <body>
@@ -41,6 +50,7 @@
   <div class="card"><h3>Flujo &amp; DXY</h3><div id="flow"></div></div>
   <div class="card"><h3>Posiciones</h3><div id="pos"></div></div>
   <div class="card"><h3>Pronóstico H4</h3><div id="fc"></div></div>
+  <div class="card"><h3>Sentimiento del oro</h3><div id="sent"></div></div>
   <div class="card"><h3>Diario (aprende de ti)</h3><div id="journal"></div></div>
   <div class="note" id="src"></div>
 </main>
@@ -88,6 +98,25 @@ async function tick(){
     $("fc").innerHTML=h.map((x,i)=>`<div class="row"><span>H4+${i+1}</span><span class="v">C ${fmt(x.median_close??x.h4?.close)} · ${fmt(x.p10)}–${fmt(x.p90)}</span></div>`).join("")+
       `<div class="row"><span class="muted">banda acierta ${fcr.calibration?.band_coverage_pct??'—'}% · dirección ${fcr.calibration?.direction_hit_pct??'—'}% (azar)</span></div>`;
   } else $("fc").innerHTML=`<div class="muted">${fcr.message||"ejecuta gm_forecast"}</div>`;
+  // sentimiento (indice diario; el API lo cachea 10 min)
+  const sn = s.sentiment || await get("/api/sentiment");
+  if(sn && sn.source==="calculado"){
+    const v=Number(sn.compuesto)||0, pos=(v+100)/2;
+    const col = v>=20?'var(--up)':(v<=-20?'var(--down)':'var(--amber)');
+    $("sent").innerHTML =
+      `<div class="big" style="color:${col}">${v>0?'+':''}${fmt(v,1)}</div>`+
+      `<div class="row"><span class="muted">${sn.etiqueta||''}</span>`+
+      `<span class="muted">${sn.n_componentes||0} comp.</span></div>`+
+      `<div class="gauge"><s></s><b style="left:calc(${pos}% - 1.5px)"></b></div>`+
+      `<div class="row"><span class="muted" style="font-size:10px">bajista</span>`+
+      `<span class="muted" style="font-size:10px">alcista</span></div>`+
+      `<div class="chips">`+Object.entries(sn.componentes_z||{})
+        .filter(([,z])=>z!==null&&z!==undefined)
+        .map(([k,z])=>`<span class="chip">${k} <b>${z>0?'+':''}${fmt(z,1)}</b></span>`).join("")+`</div>`+
+      (sn.fuentes_ausentes&&sn.fuentes_ausentes.length
+        ? `<div class="warn">Sin ${sn.fuentes_ausentes.join(", ")}. Calculado con ${sn.n_componentes} componentes.</div>`:``)+
+      `<div class="warn">Describe el estado del mercado; NO lo anticipa (medido: 0,53 sigma). Contexto, no senal.</div>`;
+  } else $("sent").innerHTML=`<div class="muted">${(sn&&sn.message)||"sin datos de sentimiento"}</div>`;
   // diario
   const j=await get("/api/journal");
   $("journal").innerHTML = (j.n||0)? rows({"operaciones":j.n,"aciertos":(j.win_rate??"—")+"%","esperanza":(j.expectancy_R??"—")+"R","neto":"$"+fmt(j.net_usd)}) :

@@ -21,6 +21,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -35,6 +36,16 @@ try:
     HAS_GUARDIAN = True
 except Exception:
     HAS_GUARDIAN = False
+
+# --- Sentimiento (opcional: necesita datos historicos en disco) ---
+try:
+    _MODEL = Path(__file__).resolve().parent.parent
+    sys.path[:0] = [str(_MODEL / "model"), str(_MODEL / "core")]
+    import gm_data  # type: ignore
+    import gm_sentiment  # type: ignore
+    HAS_SENTIMENT = True
+except Exception:
+    HAS_SENTIMENT = False
 
 # --- MT5 opcional (solo Windows) ---
 try:
@@ -199,12 +210,48 @@ def forecast():
     return {"source": "offline", "message": "Ejecuta: python gm_forecast.py <datos> para generar el pronóstico."}
 
 
+_SENT_CACHE: dict = {"ts": 0, "data": None}
+
+
+@app.get("/api/sentiment")
+def sentiment():
+    """Sentimiento del oro: internos de mercado + fuentes externas disponibles.
+
+    Se cachea 10 minutos a proposito. El compuesto se calcula sobre todo el
+    historico y el navegador sondea cada pocos segundos: recalcularlo en cada
+    peticion bloquearia el servicio sin aportar nada, porque es un indice
+    DIARIO y no cambia entre sondeos.
+    """
+    if not HAS_SENTIMENT:
+        return {"source": "offline",
+                "message": "Falta gm_sentiment o sus dependencias."}
+    now = int(time.time())
+    if _SENT_CACHE["data"] is not None and now - _SENT_CACHE["ts"] < 600:
+        return {**_SENT_CACHE["data"], "cached": True}
+
+    gold_csv = os.getenv("GM_GOLD_CSV")
+    if not gold_csv or not Path(gold_csv).exists():
+        return {"source": "offline",
+                "message": "Define GM_GOLD_CSV con la ruta del historico de oro "
+                           "(exportalo con Scripts/DATOS/GM_ExportarHistorico.mq5)."}
+    try:
+        gold = gm_data.load(gold_csv)
+        dxy_csv = os.getenv("GM_DXY_CSV")
+        dxy = gm_data.load(dxy_csv) if dxy_csv and Path(dxy_csv).exists() else None
+        snap = gm_sentiment.snapshot(gold, None, dxy)
+        out = {"source": "calculado", **snap}
+        _SENT_CACHE.update({"ts": now, "data": out})
+        return out
+    except Exception as e:
+        return {"source": "error", "message": f"{type(e).__name__}: {e}"}
+
+
 @app.get("/api/snapshot")
 def snapshot():
     """Todo junto, para que el workstation haga un solo fetch por segundo."""
     return {"ts": int(time.time()), "status": status(), "account": account(),
             "positions": positions()["positions"], "quote": quote(), "dom": dom(),
-            "flow": flow(), "forecast_available": (Path(__file__).resolve().parent.parent
+            "flow": flow(), "sentiment": sentiment(), "forecast_available": (Path(__file__).resolve().parent.parent
             / "offline" / "out_offline" / "forecast.json").exists()}
 
 

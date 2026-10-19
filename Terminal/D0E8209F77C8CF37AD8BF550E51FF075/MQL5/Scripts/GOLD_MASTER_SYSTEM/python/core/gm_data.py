@@ -24,7 +24,11 @@ ALIASES = {
     "high": ("high", "h", "max", "maximo", "máximo"),
     "low": ("low", "l", "min", "minimo", "mínimo"),
     "close": ("close", "c", "cierre", "last", "price", "adj close"),
-    "volume": ("volume", "vol", "tickvol", "volumen", "real volume"),
+    # tickvol ANTES que vol a proposito: en los CFD (oro incluido) la columna
+    # <VOL> (volumen real) viene a cero y <TICKVOL> es la que trae el dato. Con
+    # el orden inverso el volumen quedaba en cero en todo el sistema, en
+    # silencio. Aun asi se elige por CONTENIDO mas abajo, no solo por orden.
+    "volume": ("tickvol", "volume", "volumen", "vol", "real volume"),
 }
 
 
@@ -82,12 +86,19 @@ def load(path: str | Path, tz: str | None = None) -> pd.DataFrame:
     out = pd.DataFrame(index=idx)
     cols = {_clean(c): c for c in df.columns}
     for target, names in ALIASES.items():
-        src = next((cols[n] for n in names if n in cols), None)
-        if src is not None:
-            # .to_numpy() es obligatorio: df[src] trae un RangeIndex y pandas
-            # alinearía por índice contra el DatetimeIndex de `out`, dejando
-            # la columna entera en NaN sin avisar.
-            out[target] = pd.to_numeric(df[src], errors="coerce").to_numpy()
+        cands = [cols[n] for n in names if n in cols]
+        if not cands:
+            continue
+        # .to_numpy() es obligatorio: df[src] trae un RangeIndex y pandas
+        # alinearía por índice contra el DatetimeIndex de `out`, dejando la
+        # columna entera en NaN sin avisar.
+        vals = [pd.to_numeric(df[c], errors="coerce").to_numpy() for c in cands]
+        if target == "volume" and len(vals) > 1:
+            # elige por CONTENIDO: la primera candidata con algún dato real.
+            # Un fichero puede traer <VOL> y <TICKVOL> y que una de las dos sea
+            # toda ceros, asi que el orden de la lista no basta.
+            vals = sorted(vals, key=lambda a: -float(np.nansum(np.abs(a))))
+        out[target] = vals[0]
 
     if "close" not in out.columns:
         raise ValueError(f"{p.name}: no encuentro columna de cierre entre {list(df.columns)}")

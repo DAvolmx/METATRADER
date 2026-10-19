@@ -233,3 +233,35 @@ def test_params_roundtrip_json(tmp_path, fitted):
     assert back.seasonal == m.seasonal
     assert back.regime_transmat == m.regime_transmat
     assert "ECUACIÓN MAESTRA" in back.equation_text()
+
+
+# ─────────────── regresión: eleccion de columna de volumen ───────────────
+
+
+def test_volumen_se_elige_por_contenido(tmp_path):
+    """REGRESIÓN: en los CFD <VOL> viene a cero y <TICKVOL> trae el dato.
+    Eligiendo por orden de alias se dejaba el volumen a cero en silencio,
+    y eso anulaba todo interno que dependiera del volumen."""
+    f = tmp_path / "cfd.csv"
+    lines = ["<DATE>\t<TIME>\t<OPEN>\t<HIGH>\t<LOW>\t<CLOSE>\t<TICKVOL>\t<VOL>\t<SPREAD>"]
+    for i in range(30):
+        px = 2000.0 + i
+        lines.append(f"2024.01.{1 + i // 24:02d}\t{i % 24:02d}:00:00\t"
+                     f"{px}\t{px+1}\t{px-1}\t{px}\t{500 + i}\t0\t30")
+    f.write_text("\n".join(lines), encoding="utf-8")
+    df = gm_data.load(f)
+    assert df["volume"].sum() > 0, "debe coger <TICKVOL>, no <VOL> lleno de ceros"
+    assert df["volume"].iloc[0] == pytest.approx(500.0)
+
+
+def test_volumen_usa_vol_si_tickvol_esta_vacio(tmp_path):
+    """El simétrico: si el dato real está en <VOL>, debe coger ese."""
+    f = tmp_path / "real.csv"
+    lines = ["<DATE>\t<TIME>\t<OPEN>\t<HIGH>\t<LOW>\t<CLOSE>\t<TICKVOL>\t<VOL>"]
+    for i in range(30):
+        px = 2000.0 + i
+        lines.append(f"2024.01.01\t{i % 24:02d}:00:00\t{px}\t{px+1}\t{px-1}\t{px}\t0\t{900 + i}")
+    f.write_text("\n".join(lines), encoding="utf-8")
+    df = gm_data.load(f)
+    assert df["volume"].sum() > 0
+    assert df["volume"].iloc[0] == pytest.approx(900.0)
